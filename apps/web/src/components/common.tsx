@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { ArrowLeft, Building2, Star, Navigation2, Share2, Check } from "lucide-react";
+import { ArrowLeft, Building2, Star, Navigation2, Share2, Check, LucideIcon } from "lucide-react";
 
 // 設計 tokens（沿用 reference/route-app-prototype.jsx）
 export const C = {
@@ -86,7 +86,7 @@ export function OriginCard({
   accent,
   onClick,
 }: {
-  icon: React.ComponentType<{ size?: number; color?: string }>;
+  icon: LucideIcon;
   label: string;
   sub: string;
   active: boolean;

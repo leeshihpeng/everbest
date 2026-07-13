@@ -1,6 +1,7 @@
 node_modules/
 dist/
 build/
+*.tsbuildinfo
 
 # 環境變數（含金鑰，不能進版控）
 .env
