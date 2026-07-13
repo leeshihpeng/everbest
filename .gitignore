@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+
+# 環境變數（含金鑰，不能進版控）
+.env
+.env.local
+apps/api/.env
+apps/web/.env
+
+# 本機 SQLite 開發資料庫
+apps/api/prisma/dev.db
+apps/api/prisma/dev.db-journal
+
+# 編輯器/系統
+.DS_Store
+*.log

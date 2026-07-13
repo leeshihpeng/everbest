@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// StaffRole ("SALES"|"MANAGER"|"MANAGER_VIEW"|"DRIVER"|"DRIVER_VIEW"|"ADMIN") 與
+// OrderStatus ("PENDING"|"SELECTED"|"DISPATCHED"|"COMPLETED") 沿用 String（原本因本機開發用
+// SQLite 不支援 enum 才改的，繼續用 String 也完全相容 Postgres，不用改回 enum），
+// 型別與驗證交給 packages/shared-types 與應用層（見 apps/api/src/utils/roles.ts）
+
+model Customer {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  name       String
+  address    String
+  city       String
+  phone      String?
+  isPriority Boolean  @default(false)
+  lat        Float?
+  lng        Float?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Staff {
+  id          String      @id @default(cuid())
+  name        String
+  roles       String      // 逗號分隔的 StaffRole 清單（SQLite 不支援陣列型別），見 rolesToArray/rolesToString
+  homeAddress String
+  homeLat     Float?
+  homeLng     Float?
+  lineGroupId String?
+  salesRegions String?    // 業務人員可選客戶的縣市範圍，逗號分隔（如 "台北市,新北市"）；空值＝不限制
+  passwordHash String?    // 簡易登入用（PIN 或密碼雜湊）
+  orders      DispatchOrder[] @relation("AssignedDriver")
+  notifications Notification[]
+  createdAt   DateTime    @default(now())
+}
+
+model SystemSetting {
+  id             String  @id @default("singleton")
+  companyAddress String
+  companyLat     Float?
+  companyLng     Float?
+}
+
+model DispatchOrder {
+  id               String              @id @default(cuid())
+  deliveryDate     DateTime
+  customerCode     String
+  customerName     String
+  address          String
+  phone            String?
+  status           String              @default("PENDING")
+  isPriority       Boolean             @default(false)
+  assignedDriverId String?
+  assignedDriver   Staff?              @relation("AssignedDriver", fields: [assignedDriverId], references: [id])
+  routeSequence    Int?
+  lat              Float?
+  lng              Float?
+  items            DispatchOrderItem[]
+  notifications    Notification[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([deliveryDate, status])
+}
+
+model DispatchOrderItem {
+  id          String        @id @default(cuid())
+  order       DispatchOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId     String
+  productName String
+  quantity    Int
+}
+
+model Notification {
+  id        String        @id @default(cuid())
+  order     DispatchOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   String
+  staff     Staff         @relation(fields: [staffId], references: [id])
+  staffId   String
+  message   String
+  isRead    Boolean       @default(false)
+  createdAt DateTime      @default(now())
+}

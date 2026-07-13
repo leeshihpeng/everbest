@@ -1,0 +1,136 @@
+import { Router } from "express";
+import bcrypt from "bcryptjs";
+import { PrismaClient } from "@prisma/client";
+import { requireAuth, requireRole } from "../middleware/auth";
+import { StaffRole, validateStaffRoles } from "@route-scheduler/shared-types";
+import { geocodeAddress } from "../services/googleMaps";
+import { rolesToArray, rolesToString } from "../utils/roles";
+
+const prisma = new PrismaClient();
+export const staffRouter = Router();
+
+staffRouter.use(requireAuth);
+
+staffRouter.get("/", async (_req, res, next) => {
+  try {
+    const staff = await prisma.staff.findMany({
+      select: { id: true, name: true, roles: true, homeAddress: true, homeLat: true, homeLng: true, lineGroupId: true, salesRegions: true },
+    });
+    res.json(staff.map((s) => ({ ...s, roles: rolesToArray(s.roles), salesRegions: s.salesRegions ? s.salesRegions.split(",") : [] })));
+  } catch (err) {
+    next(err);
+  }
+});
+
+staffRouter.post("/", requireRole("ADMIN"), async (req, res, next) => {
+  try {
+    const { name, roles, homeAddress, lineGroupId, password, salesRegions } = req.body as {
+      name: string;
+      roles: StaffRole[];
+      homeAddress: string;
+      lineGroupId?: string;
+      password: string;
+      salesRegions?: string[];
+    };
+
+    // 規格書 3.2：物流主管與送貨人員為互斥角色
+    if (!validateStaffRoles(roles as any)) {
+      return res.status(400).json({ error: "物流主管與送貨人員為互斥角色，不可同時指派" });
+    }
+
+    const coords = await geocodeAddress(homeAddress);
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const staff = await prisma.staff.create({
+      data: {
+        name,
+        roles: rolesToString(roles),
+        homeAddress,
+        lineGroupId,
+        passwordHash,
+        homeLat: coords?.lat,
+        homeLng: coords?.lng,
+        salesRegions: salesRegions && salesRegions.length > 0 ? salesRegions.join(",") : null,
+      },
+    });
+
+    res.status(201).json({ id: staff.id, name: staff.name, roles: rolesToArray(staff.roles), salesRegions: salesRegions ?? [] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 批次補齊尚未定位（homeLat/homeLng 為 null）的人員住家座標
+staffRouter.post("/geocode-missing", requireRole("ADMIN"), async (_req, res, next) => {
+  try {
+    const targets = await prisma.staff.findMany({ where: { homeLat: null } });
+    let updated = 0;
+    const errors: string[] = [];
+
+    for (const s of targets) {
+      try {
+        const coords = await geocodeAddress(s.homeAddress);
+        if (!coords) {
+          errors.push(`${s.name}: 找不到座標`);
+          continue;
+        }
+        await prisma.staff.update({ where: { id: s.id }, data: { homeLat: coords.lat, homeLng: coords.lng } });
+        updated++;
+      } catch (e) {
+        errors.push(`${s.name}: ${(e as Error).message}`);
+      }
+    }
+
+    res.json({ total: targets.length, updated, failed: errors.length, errors });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 刪除人員：先清掉關聯的通知，並把該人員指派的派遣單改回未指派，避免留下無法解析的參照
+staffRouter.delete("/:id", requireRole("ADMIN"), async (req, res, next) => {
+  try {
+    await prisma.notification.deleteMany({ where: { staffId: req.params.id } });
+    await prisma.dispatchOrder.updateMany({ where: { assignedDriverId: req.params.id }, data: { assignedDriverId: null } });
+    await prisma.staff.delete({ where: { id: req.params.id } });
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+staffRouter.put("/:id", requireRole("ADMIN"), async (req, res, next) => {
+  try {
+    const { name, roles, homeAddress, lineGroupId, salesRegions } = req.body as {
+      name?: string;
+      roles?: StaffRole[];
+      homeAddress?: string;
+      lineGroupId?: string;
+      salesRegions?: string[];
+    };
+
+    if (roles && !validateStaffRoles(roles as any)) {
+      return res.status(400).json({ error: "物流主管與送貨人員為互斥角色，不可同時指派" });
+    }
+
+    const updateData: Record<string, unknown> = {
+      name,
+      roles: roles ? rolesToString(roles) : undefined,
+      lineGroupId,
+      salesRegions: salesRegions ? (salesRegions.length > 0 ? salesRegions.join(",") : null) : undefined,
+    };
+    if (homeAddress) {
+      updateData.homeAddress = homeAddress;
+      const coords = await geocodeAddress(homeAddress);
+      if (coords) {
+        updateData.homeLat = coords.lat;
+        updateData.homeLng = coords.lng;
+      }
+    }
+
+    const staff = await prisma.staff.update({ where: { id: req.params.id }, data: updateData });
+    res.json({ id: staff.id, name: staff.name, roles: rolesToArray(staff.roles), salesRegions: staff.salesRegions ? staff.salesRegions.split(",") : [] });
+  } catch (err) {
+    next(err);
+  }
+});

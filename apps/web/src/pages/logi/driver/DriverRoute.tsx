@@ -1,0 +1,252 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Bell, Check } from "lucide-react";
+import { api } from "../../../api/client";
+import { getAuthedStaff } from "../../../lib/auth";
+import { C, TopBar, Pill, RouteTimeline, ActionRow, TimelineRoute } from "../../../components/common";
+import { buildNavigationUrl } from "../../../lib/googleMapsLoader";
+
+interface OrderItem {
+  productName: string;
+  quantity: number;
+}
+
+interface Order {
+  id: string;
+  customerCode: string;
+  customerName: string;
+  address: string;
+  isPriority: boolean;
+  assignedDriverId?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  items: OrderItem[];
+  status: string;
+}
+
+interface Staff {
+  id: string;
+  name: string;
+  homeAddress: string;
+  homeLat?: number | null;
+  homeLng?: number | null;
+}
+
+interface Settings {
+  companyAddress: string;
+  companyLat?: number | null;
+  companyLng?: number | null;
+}
+
+export default function DriverRoute() {
+  const navigate = useNavigate();
+  const me = getAuthedStaff();
+
+  const [origin, setOrigin] = useState<"company" | "home">("company");
+  const [destination, setDestination] = useState<"company" | "home">("company");
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [self, setSelf] = useState<Staff | null>(null);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [completed, setCompleted] = useState<Set<string>>(new Set());
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [route, setRoute] = useState<TimelineRoute | null>(null);
+  const [routeStops, setRouteStops] = useState<Order[]>([]); // 已排序好的停靠站，供「開始導航」使用
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!me) {
+      navigate("/login");
+      return;
+    }
+    (async () => {
+      try {
+        const [orderList, staffList, s] = await Promise.all([api.getOrders({ status: "SELECTED" }), api.getStaff(), api.getSettings()]);
+        setOrders(orderList.filter((o: Order) => o.assignedDriverId === me.id));
+        setSelf(staffList.find((st: Staff) => st.id === me.id) ?? null);
+        setSettings(s);
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const assignedOrders = useMemo(() => orders.filter((o) => !completed.has(o.id)), [orders, completed]);
+
+  const originPoint = origin === "company" ? { lat: settings?.companyLat, lng: settings?.companyLng } : { lat: self?.homeLat, lng: self?.homeLng };
+  const destPoint = destination === "company" ? { lat: settings?.companyLat, lng: settings?.companyLng } : { lat: self?.homeLat, lng: self?.homeLng };
+
+  useEffect(() => {
+    if (loading) return;
+    (async () => {
+      setRouteLoading(true);
+      setRouteError(null);
+      try {
+        const stops = assignedOrders.filter((o) => o.lat != null && o.lng != null);
+        if (stops.length === 0) {
+          setRoute(null);
+          return;
+        }
+        if (originPoint.lat == null || originPoint.lng == null || destPoint.lat == null || destPoint.lng == null) {
+          throw new Error("出發地或目的地缺少座標");
+        }
+        const result = await api.optimizeRoute({
+          origin: { lat: originPoint.lat, lng: originPoint.lng },
+          destination: { lat: destPoint.lat, lng: destPoint.lng },
+          stops: stops.map((o) => ({ refId: o.id, lat: o.lat, lng: o.lng, isPriority: o.isPriority })),
+        });
+        const byId = new Map(stops.map((o) => [o.id, o]));
+        setRouteStops(result.orderedStopRefIds.map((id) => byId.get(id)!));
+        setRoute({
+          stops: result.legs.map((leg) => {
+            const o = byId.get(leg.refId)!;
+            return {
+              refId: o.id,
+              name: o.customerName,
+              subtitle: o.address,
+              isPriority: o.isPriority,
+              legDistanceKm: leg.legDistanceKm,
+              legDurationMin: leg.legDurationMin,
+              products: o.items.map((i) => ({ name: i.productName, qty: i.quantity })),
+            };
+          }),
+          finalLegDistanceKm: result.finalLegDistanceKm,
+          finalLegDurationMin: result.finalLegDurationMin,
+          totalDistanceKm: result.totalDistanceKm,
+          totalDurationMin: result.totalDurationMin,
+        });
+      } catch (err) {
+        setRouteError((err as Error).message);
+      } finally {
+        setRouteLoading(false);
+      }
+    })();
+  }, [origin, destination, loading, assignedOrders.length]);
+
+  async function toggleDone(id: string) {
+    const wasCompleted = completed.has(id);
+    const s = new Set(completed);
+    wasCompleted ? s.delete(id) : s.add(id);
+    setCompleted(s);
+    try {
+      await api.updateOrderStatus(id, wasCompleted ? "DISPATCHED" : "COMPLETED");
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  if (loading) return <div className="p-6 text-center text-[13px]" style={{ color: C.muted }}>載入中…</div>;
+  if (error) return <div className="p-6 text-center text-[13px]" style={{ color: C.danger }}>{error}</div>;
+
+  return (
+    <div>
+      <TopBar
+        title="今日配送名單（送貨人員）"
+        accent={C.logiAccent}
+        onBack={() => navigate("/")}
+        right={
+          <button className="relative p-1">
+            <Bell size={18} />
+            <span style={{ background: C.danger }} className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full" />
+          </button>
+        }
+      />
+      <div className="p-4">
+        <div style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.muted }} className="text-[12px] font-bold mb-2">
+          出發地／目的地（可調整）
+        </div>
+        <div className="flex gap-2 mb-2">
+          <Pill accent={C.logiAccent} active={origin === "company"} onClick={() => setOrigin("company")}>
+            出發：公司
+          </Pill>
+          <Pill accent={C.logiAccent} active={origin === "home"} onClick={() => setOrigin("home")}>
+            出發：住家
+          </Pill>
+        </div>
+        <div className="flex gap-2 mb-4">
+          <Pill accent={C.logiAccent} active={destination === "company"} onClick={() => setDestination("company")}>
+            目的：公司
+          </Pill>
+          <Pill accent={C.logiAccent} active={destination === "home"} onClick={() => setDestination("home")}>
+            目的：住家
+          </Pill>
+        </div>
+
+        {routeLoading && <div className="text-center text-[13px] py-4" style={{ color: C.muted }}>路線計算中…</div>}
+        {routeError && <div className="text-center text-[13px] py-2" style={{ color: C.danger }}>{routeError}</div>}
+
+        {route && (
+          <>
+            <div className="rounded-xl p-3 mb-4 flex items-center justify-between" style={{ background: C.logiAccentSoft }}>
+              <div style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.navy }} className="text-[12px] font-bold">
+                今日配送總距離
+              </div>
+              <div style={{ fontFamily: "Manrope", color: C.logiAccent }} className="text-[18px] font-extrabold">
+                {route.totalDistanceKm.toFixed(1)} km
+              </div>
+            </div>
+            <RouteTimeline
+              originLabel={origin === "company" ? "公司" : "住家"}
+              destinationLabel={destination === "company" ? "公司" : "住家"}
+              route={route}
+              showProducts={true}
+              accent={C.logiAccent}
+            />
+          </>
+        )}
+
+        <div style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.muted }} className="text-[12px] font-bold mt-4 mb-2">
+          配送完成標記
+        </div>
+        {orders.map((o) => (
+          <button
+            key={o.id}
+            onClick={() => toggleDone(o.id)}
+            className="w-full flex items-center gap-2 rounded-xl px-3 py-2 mb-2"
+            style={{ background: "#fff", border: `1px solid ${C.hairline}` }}
+          >
+            <div
+              className="flex items-center justify-center rounded-md"
+              style={{ width: 18, height: 18, border: `2px solid ${completed.has(o.id) ? C.logiAccent : C.hairline}`, background: completed.has(o.id) ? C.logiAccent : "transparent" }}
+            >
+              {completed.has(o.id) && <Check size={12} color="#fff" strokeWidth={3} />}
+            </div>
+            <span
+              style={{ fontFamily: "'Noto Sans TC', sans-serif", textDecoration: completed.has(o.id) ? "line-through" : "none", color: completed.has(o.id) ? C.muted : C.text }}
+              className="text-[13px] font-semibold flex-1 text-left"
+            >
+              {o.customerName}
+            </span>
+            <span style={{ color: completed.has(o.id) ? C.logiAccent : C.muted, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[11px] font-bold">
+              {completed.has(o.id) ? "已完成" : "待完成"}
+            </span>
+          </button>
+        ))}
+        {orders.length === 0 && (
+          <div className="text-center text-[13px] py-8" style={{ color: C.muted }}>
+            今天沒有指派給你的配送任務
+          </div>
+        )}
+
+        {route && (
+          <ActionRow
+            accent={C.logiAccent}
+            onNavigate={() => {
+              if (originPoint.lat == null || originPoint.lng == null || destPoint.lat == null || destPoint.lng == null) return;
+              const url = buildNavigationUrl(
+                { lat: originPoint.lat, lng: originPoint.lng },
+                { lat: destPoint.lat, lng: destPoint.lng },
+                routeStops.map((o) => ({ lat: o.lat!, lng: o.lng! }))
+              );
+              window.open(url, "_blank");
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,183 @@
+import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate } from "react-router-dom";
+import { ChevronRight, Truck, User, Building2, LogOut } from "lucide-react";
+import BizSetup from "./pages/biz/BizSetup";
+import ManagerSelect from "./pages/logi/manager/ManagerSelect";
+import DriverRoute from "./pages/logi/driver/DriverRoute";
+import AdminHome from "./pages/admin/AdminHome";
+import Login from "./pages/Login";
+import { getAuthedStaff, isLoggedIn, clearSession } from "./lib/auth";
+import { C } from "./components/common";
+
+function RequireAuth({ children }: { children: JSX.Element }) {
+  if (!isLoggedIn()) return <Navigate to="/login" replace />;
+  return children;
+}
+
+// 依角色限制頁面存取；沒有該角色就導回首頁（首頁只會顯示使用者有權限的入口）
+function RequireRole({ role, children }: { role: string; children: JSX.Element }) {
+  if (!isLoggedIn()) return <Navigate to="/login" replace />;
+  const staff = getAuthedStaff();
+  if (!staff?.roles.includes(role)) return <Navigate to="/" replace />;
+  return children;
+}
+
+function HomePage() {
+  const navigate = useNavigate();
+  const staff = getAuthedStaff();
+
+  function handleLogout() {
+    clearSession();
+    navigate("/login");
+  }
+
+  return (
+    <div>
+      <div style={{ background: C.navy }} className="px-5 pt-8 pb-10 rounded-b-3xl text-white">
+        <div style={{ fontFamily: "Manrope", color: "#9FB0C9" }} className="text-[11px] font-bold tracking-wide mb-1">
+          ROUTE SCHEDULER
+        </div>
+        <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[22px] font-black leading-tight">
+          路線排程系統
+        </div>
+        <div style={{ color: "#B7C2D6" }} className="text-[12px] mt-1 flex items-center justify-between">
+          <span>{staff ? `你好，${staff.name}` : "選擇今日操作身份"}</span>
+          {staff && (
+            <button onClick={handleLogout} className="flex items-center gap-1 text-white/80">
+              <LogOut size={12} /> 登出
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="p-4 -mt-5">
+        {staff?.roles.includes("SALES") && (
+          <Link to="/biz" className="w-full flex items-center gap-3 rounded-2xl p-4 mb-3 shadow-sm" style={{ background: "#fff" }}>
+            <div className="rounded-xl flex items-center justify-center" style={{ width: 46, height: 46, background: C.bizAccentSoft }}>
+              <User size={22} color={C.bizAccent} />
+            </div>
+            <div className="text-left flex-1">
+              <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[15px]">
+                業務模式
+              </div>
+              <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
+                自行勾選拜訪客戶，產生最佳化路線
+              </div>
+            </div>
+            <ChevronRight size={18} color={C.muted} />
+          </Link>
+        )}
+        {staff?.roles.includes("MANAGER") && (
+          <Link to="/logi/manager" className="w-full flex items-center gap-3 rounded-2xl p-4 mb-3 shadow-sm" style={{ background: "#fff" }}>
+            <div className="rounded-xl flex items-center justify-center" style={{ width: 46, height: 46, background: C.logiAccentSoft }}>
+              <Truck size={22} color={C.logiAccent} />
+            </div>
+            <div className="text-left flex-1">
+              <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[15px]">
+                物流模式 — 物流主管
+              </div>
+              <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
+                派遣單勾選與優先標記
+              </div>
+            </div>
+            <ChevronRight size={18} color={C.muted} />
+          </Link>
+        )}
+        {staff?.roles.includes("DRIVER") && (
+          <Link to="/logi/driver" className="w-full flex items-center gap-3 rounded-2xl p-4 mb-3 shadow-sm" style={{ background: "#fff" }}>
+            <div className="rounded-xl flex items-center justify-center" style={{ width: 46, height: 46, background: C.logiAccentSoft }}>
+              <Truck size={22} color={C.logiAccent} />
+            </div>
+            <div className="text-left flex-1">
+              <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[15px]">
+                物流模式 — 送貨人員
+              </div>
+              <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
+                今日配送名單與路線調整
+              </div>
+            </div>
+            <ChevronRight size={18} color={C.muted} />
+          </Link>
+        )}
+        {staff?.roles.includes("ADMIN") && (
+          <Link to="/admin" className="w-full flex items-center gap-3 rounded-2xl p-4 shadow-sm" style={{ background: "#fff" }}>
+            <div className="rounded-xl flex items-center justify-center" style={{ width: 46, height: 46, background: "#EDEFF2" }}>
+              <Building2 size={22} color={C.navy} />
+            </div>
+            <div className="text-left flex-1">
+              <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[15px]">
+                內勤後台
+              </div>
+              <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
+                客戶／人員／派遣單管理
+              </div>
+            </div>
+            <ChevronRight size={18} color={C.muted} />
+          </Link>
+        )}
+        {staff && !["SALES", "MANAGER", "DRIVER", "ADMIN"].some((r) => staff.roles.includes(r)) && (
+          <div style={{ color: C.muted }} className="text-center text-[13px] py-8">
+            你的帳號目前沒有指派任何操作權限，請聯絡管理員。
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <div style={{ background: "#0F1720", minHeight: "100vh" }} className="flex items-center justify-center p-4">
+        <div
+          style={{ width: 420, maxWidth: "100%", background: C.bg, borderRadius: 24, boxShadow: "0 30px 60px rgba(0,0,0,0.4)" }}
+          className="overflow-hidden relative"
+        >
+          <div style={{ minHeight: 780 }} className="relative">
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route
+                path="/"
+                element={
+                  <RequireAuth>
+                    <HomePage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/biz"
+                element={
+                  <RequireRole role="SALES">
+                    <BizSetup />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/logi/manager"
+                element={
+                  <RequireRole role="MANAGER">
+                    <ManagerSelect />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/logi/driver"
+                element={
+                  <RequireRole role="DRIVER">
+                    <DriverRoute />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <RequireRole role="ADMIN">
+                    <AdminHome />
+                  </RequireRole>
+                }
+              />
+            </Routes>
+          </div>
+        </div>
+      </div>
+    </BrowserRouter>
+  );
+}

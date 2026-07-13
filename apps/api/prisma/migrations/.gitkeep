@@ -1,0 +1,1 @@
+SQLite 專用的舊 migration 已移除，正式環境改用 PostgreSQL 後會在連上雲端資料庫時重新產生 migration。
