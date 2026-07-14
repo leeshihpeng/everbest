@@ -106,7 +106,7 @@ export default function OrdersPanel() {
     <div className="p-4">
       <div className="rounded-xl p-3 mb-4" style={{ background: "#fff", border: `1px solid ${C.hairline}` }}>
         <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[13px] mb-2">
-          CSV 匯入派遣單（欄位：送貨日期,客戶編號,客戶名稱,住址,電話,產品項目,數量）
+          CSV 匯入派遣單（欄位：出貨日期,公司名稱,倉庫住址1,公司電話1,託運備註,訂貨數量之總計）
         </div>
         <div className="flex flex-col gap-2">
           <input ref={fileRef} type="file" accept=".csv" className="text-[12px] w-full min-w-0" />
@@ -128,7 +128,7 @@ export default function OrdersPanel() {
                 <br />
                 偵測到的 CSV 欄位名稱：<b>{importResult.detectedHeaders.join("、")}</b>
                 <br />
-                請確認欄位名稱是否為「送貨日期／客戶編號／客戶名稱／住址／電話／產品項目／數量」或其常見別名。
+                請確認欄位名稱是否為「出貨日期／公司名稱／倉庫住址1／公司電話1／託運備註／訂貨數量之總計」或其常見別名。
               </div>
             )}
           </div>

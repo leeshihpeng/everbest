@@ -83,6 +83,10 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
         errors.push(`${g.header.customerCode}: 送貨日期「${g.header.deliveryDate}」格式無法解析（略過此筆）`);
         continue;
       }
+      if (g.items.length === 0) {
+        errors.push(`${g.header.customerName}: 託運備註無法解析出任何品項（略過此筆）`);
+        continue;
+      }
       const coords = await geocodeAddress(g.header.address);
       const order = await prisma.dispatchOrder.create({
         data: {
