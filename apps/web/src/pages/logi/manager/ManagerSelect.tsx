@@ -69,6 +69,10 @@ export default function ManagerSelect() {
     s.has(id) ? s.delete(id) : s.add(id);
     setSelected(s);
   };
+  const allSelected = orders.length > 0 && selected.size === orders.length;
+  const toggleSelectAll = () => {
+    setSelected(allSelected ? new Set() : new Set(orders.map((o) => o.id)));
+  };
   const togglePriority = (id: string) => {
     const s = new Set(priorityOverride);
     s.has(id) ? s.delete(id) : s.add(id);
@@ -153,8 +157,16 @@ export default function ManagerSelect() {
   return (
     <div>
       <TopBar title="派遣單勾選（物流主管）" accent={C.logiAccent} onBack={() => navigate("/")} />
-      <div className="px-4 pt-3 pb-2" style={{ color: C.muted, fontFamily: "'Noto Sans TC', sans-serif" }}>
+      <div className="px-4 pt-3 pb-2 flex items-center justify-between" style={{ color: C.muted, fontFamily: "'Noto Sans TC', sans-serif" }}>
         <div className="text-[12px]">待處理派遣單</div>
+        {orders.length > 0 && (
+          <button onClick={toggleSelectAll} className="flex items-center gap-1.5">
+            <Checkbox checked={allSelected} />
+            <span style={{ color: C.text }} className="text-[12px] font-bold">
+              全部勾選
+            </span>
+          </button>
+        )}
       </div>
       {drivers.length > 0 && (
         <div className="px-4 pb-2">
