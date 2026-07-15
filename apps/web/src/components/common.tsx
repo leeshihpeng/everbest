@@ -17,6 +17,9 @@ export const C = {
   gold: "#C7902E",
   goldSoft: "#FBF1DE",
   danger: "#C4483A",
+  dangerSoft: "#FBEAE7",
+  success: "#1F8C4E",
+  successSoft: "#E4F3E9",
 };
 
 export function TopBar({
@@ -201,18 +204,22 @@ export function RouteTimeline({
                           <button
                             key={pi}
                             onClick={p.onToggle}
-                            style={{ background: p.checked ? C.bizAccent : C.bizAccentSoft, color: p.checked ? "#fff" : C.bizAccent }}
+                            style={{ background: p.checked ? C.success : C.dangerSoft, color: p.checked ? "#fff" : C.danger }}
                             className="flex items-center gap-1.5 text-[13px] font-bold px-2 py-1 rounded-lg"
                           >
                             <span>
                               {p.name} ×{p.qty}
                             </span>
-                            <span style={{ color: p.checked ? "rgba(255,255,255,0.85)" : C.bizAccent }} className="text-[11px]">
+                            <span style={{ color: p.checked ? "rgba(255,255,255,0.85)" : C.danger }} className="text-[11px]">
                               {p.checked ? "已完成" : "待完成"}
                             </span>
                           </button>
                         ) : (
-                          <span key={pi} style={{ background: C.bizAccentSoft, color: C.bizAccent }} className="text-[13px] font-bold px-2 py-1 rounded-lg">
+                          <span
+                            key={pi}
+                            style={{ background: p.checked ? C.success : C.bizAccentSoft, color: p.checked ? "#fff" : C.bizAccent }}
+                            className="text-[13px] font-bold px-2 py-1 rounded-lg"
+                          >
                             {p.name} ×{p.qty}
                           </span>
                         )
