@@ -10,7 +10,7 @@ type Tab = "customers" | "staff" | "orders" | "settings";
 
 export default function AdminHome() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>("customers");
+  const [tab, setTab] = useState<Tab>("orders");
 
   return (
     <div>
@@ -18,9 +18,9 @@ export default function AdminHome() {
       <div className="px-4 pt-3 flex gap-2">
         {(
           [
+            ["orders", "派遣單"],
             ["customers", "客戶"],
             ["staff", "人員"],
-            ["orders", "派遣單"],
             ["settings", "設定"],
           ] as [Tab, string][]
         ).map(([key, label]) => (
