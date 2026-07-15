@@ -76,6 +76,7 @@ model DispatchOrderItem {
   orderId     String
   productName String
   quantity    Int
+  checked     Boolean       @default(false) // 送貨人員檢貨（裝車確認）完成標記
 }
 
 model Notification {

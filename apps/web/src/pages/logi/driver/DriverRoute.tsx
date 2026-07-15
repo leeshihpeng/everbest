@@ -7,8 +7,10 @@ import { C, TopBar, Pill, RouteTimeline, ActionRow, TimelineRoute } from "../../
 import { buildNavigationUrl } from "../../../lib/googleMapsLoader";
 
 interface OrderItem {
+  id: string;
   productName: string;
   quantity: number;
+  checked: boolean;
 }
 
 interface Order {
@@ -127,6 +129,43 @@ export default function DriverRoute() {
     })();
   }, [origin, destination, loading, assignedOrders.length]);
 
+  async function toggleItemChecked(orderId: string, itemId: string) {
+    const order = orders.find((o) => o.id === orderId);
+    const item = order?.items.find((i) => i.id === itemId);
+    if (!item) return;
+    const nextChecked = !item.checked;
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, items: o.items.map((i) => (i.id === itemId ? { ...i, checked: nextChecked } : i)) } : o))
+    );
+    try {
+      await api.updateItemChecked(itemId, nextChecked);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  // 檢貨勾選狀態存在 orders 裡（即時更新），route 是路線計算完成當下的快照，
+  // 這裡合併兩者：路線順序／距離用 route 的，品項勾選狀態即時反映 orders 的最新值
+  const liveRoute = useMemo(() => {
+    if (!route) return null;
+    const byId = new Map(orders.map((o) => [o.id, o]));
+    return {
+      ...route,
+      stops: route.stops.map((s) => {
+        const o = byId.get(s.refId);
+        return {
+          ...s,
+          products: o?.items.map((i) => ({
+            name: i.productName,
+            qty: i.quantity,
+            checked: i.checked,
+            onToggle: () => toggleItemChecked(o.id, i.id),
+          })),
+        };
+      }),
+    };
+  }, [route, orders]);
+
   async function toggleDone(id: string) {
     const wasCompleted = completed.has(id);
     const s = new Set(completed);
@@ -192,7 +231,7 @@ export default function DriverRoute() {
             <RouteTimeline
               originLabel={origin === "company" ? "公司" : "住家"}
               destinationLabel={destination === "company" ? "公司" : "住家"}
-              route={route}
+              route={liveRoute!}
               showProducts={true}
               accent={C.logiAccent}
             />

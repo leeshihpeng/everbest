@@ -115,6 +115,8 @@ export function OriginCard({
 export interface TimelineProduct {
   name: string;
   qty: number;
+  checked?: boolean;
+  onToggle?: () => void;
 }
 
 export interface TimelineStop {
@@ -193,12 +195,28 @@ export function RouteTimeline({
                     {n.data.subtitle}
                   </div>
                   {showProducts && n.data.products && n.data.products.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {n.data.products.map((p, pi) => (
-                        <span key={pi} style={{ background: C.logiAccentSoft, color: C.logiAccent }} className="text-[11px] px-1.5 py-0.5 rounded">
-                          {p.name} ×{p.qty}
-                        </span>
-                      ))}
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {n.data.products.map((p, pi) =>
+                        p.onToggle ? (
+                          <button
+                            key={pi}
+                            onClick={p.onToggle}
+                            style={{ background: p.checked ? C.bizAccent : C.bizAccentSoft, color: p.checked ? "#fff" : C.bizAccent }}
+                            className="flex items-center gap-1.5 text-[13px] font-bold px-2 py-1 rounded-lg"
+                          >
+                            <span>
+                              {p.name} ×{p.qty}
+                            </span>
+                            <span style={{ color: p.checked ? "rgba(255,255,255,0.85)" : C.bizAccent }} className="text-[11px]">
+                              {p.checked ? "已完成" : "待完成"}
+                            </span>
+                          </button>
+                        ) : (
+                          <span key={pi} style={{ background: C.bizAccentSoft, color: C.bizAccent }} className="text-[13px] font-bold px-2 py-1 rounded-lg">
+                            {p.name} ×{p.qty}
+                          </span>
+                        )
+                      )}
                     </div>
                   )}
                   <div style={{ fontFamily: "Manrope", color: accent }} className="text-[11px] font-bold mt-1">

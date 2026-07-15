@@ -243,6 +243,20 @@ ordersRouter.patch("/:id/status", async (req, res, next) => {
   }
 });
 
+// 送貨人員裝車前逐項檢貨標記
+ordersRouter.patch("/items/:itemId/checked", async (req, res, next) => {
+  try {
+    const { checked } = req.body as { checked: boolean };
+    const item = await prisma.dispatchOrderItem.update({
+      where: { id: req.params.itemId },
+      data: { checked },
+    });
+    res.json(item);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // 出發前如有新增／修改內容（規格書 5.4）— 內勤或物流主管都可異動派遣單
 ordersRouter.put("/:id", requireRole(["ADMIN", "MANAGER"]), async (req: AuthedRequest, res, next) => {
   try {

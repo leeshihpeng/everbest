@@ -110,6 +110,8 @@ export const api = {
     }>("/orders/select", { method: "POST", body: JSON.stringify(body) }),
   updateOrderStatus: (id: string, status: "DISPATCHED" | "COMPLETED") =>
     request(`/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  updateItemChecked: (itemId: string, checked: boolean) =>
+    request(`/orders/items/${itemId}/checked`, { method: "PATCH", body: JSON.stringify({ checked }) }),
   deleteOrder: (id: string) => request<void>(`/orders/${id}`, { method: "DELETE" }),
   geocodeMissingOrders: () =>
     request<{ total: number; updated: number; failed: number; errors: string[] }>("/orders/geocode-missing", { method: "POST" }),
