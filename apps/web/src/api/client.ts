@@ -123,4 +123,5 @@ export const api = {
   getNotifications: () =>
     request<{ id: string; orderId: string; message: string; isRead: boolean; createdAt: string }[]>("/notifications"),
   markNotificationRead: (id: string) => request(`/notifications/${id}/read`, { method: "PATCH" }),
+  deleteNotification: (id: string) => request<void>(`/notifications/${id}`, { method: "DELETE" }),
 };

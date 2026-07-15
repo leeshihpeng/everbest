@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Trash2 } from "lucide-react";
 import { api } from "../api/client";
 import { C, TopBar } from "../components/common";
 
@@ -48,6 +49,18 @@ export default function Notifications() {
     }
   }
 
+  async function handleDelete(e: React.MouseEvent, id: string) {
+    e.stopPropagation();
+    const prev = items;
+    setItems((cur) => cur.filter((n) => n.id !== id));
+    try {
+      await api.deleteNotification(id);
+    } catch (err) {
+      setItems(prev);
+      setError((err as Error).message);
+    }
+  }
+
   return (
     <div>
       <TopBar title="通知" accent={C.navy} onBack={() => navigate("/")} />
@@ -69,14 +82,14 @@ export default function Notifications() {
         )}
         {!loading &&
           items.map((n) => (
-            <button
+            <div
               key={n.id}
               onClick={() => handleClick(n)}
-              className="w-full text-left rounded-xl p-3 mb-2 flex items-start gap-2"
+              className="w-full text-left rounded-xl p-3 mb-2 flex items-start gap-2 cursor-pointer"
               style={{ background: n.isRead ? "#fff" : C.bizAccentSoft, border: `1px solid ${C.hairline}` }}
             >
               {!n.isRead && <div className="mt-1.5 rounded-full shrink-0" style={{ width: 7, height: 7, background: C.bizAccent }} />}
-              <div className={n.isRead ? "flex-1" : "flex-1 ml-0"}>
+              <div className="flex-1">
                 <div style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.text }} className={`text-[13px] ${n.isRead ? "" : "font-bold"}`}>
                   {n.message}
                 </div>
@@ -84,7 +97,10 @@ export default function Notifications() {
                   {formatTime(n.createdAt)}
                 </div>
               </div>
-            </button>
+              <button onClick={(e) => handleDelete(e, n.id)} className="p-1 -mt-1 -mr-1 shrink-0">
+                <Trash2 size={15} color={C.muted} />
+              </button>
+            </div>
           ))}
       </div>
     </div>

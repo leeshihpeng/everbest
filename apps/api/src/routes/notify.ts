@@ -33,6 +33,19 @@ notifyRouter.patch("/:id/read", async (req, res, next) => {
   }
 });
 
+notifyRouter.delete("/:id", async (req: AuthedRequest, res, next) => {
+  try {
+    const notification = await prisma.notification.findUnique({ where: { id: req.params.id } });
+    if (!notification || notification.staffId !== req.staff!.id) {
+      return res.status(404).json({ error: "找不到通知" });
+    }
+    await prisma.notification.delete({ where: { id: req.params.id } });
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // 內部使用：手動觸發 LINE 群組推播（例如「分享到 LINE 群組」按鈕）
 notifyRouter.post("/line", async (req, res, next) => {
   try {

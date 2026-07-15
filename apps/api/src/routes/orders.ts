@@ -117,9 +117,12 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
         },
       });
       created.push(order.id);
+    }
 
-      // 5.4：新增時除了通知所有物流主管，也直接廣播給所有送貨人員（此時尚未指派特定人員）
-      await notifyOrderStakeholders(order.id, `新派遣單待確認：${order.customerName}（${order.customerCode}）`, null);
+    // 5.4：新增時除了通知所有物流主管，也直接廣播給所有送貨人員（此時尚未指派特定人員）
+    // 整批匯入只發一則通知，避免匯入多筆時洗版
+    if (created.length > 0) {
+      await notifyOrderStakeholders(created[created.length - 1], `今天有 ${created.length} 筆新派遣單待確認`, null);
     }
 
     res.json({ createdCount: created.length, orderIds: created, errors, detectedHeaders: getCsvHeaders(req.file.buffer) });
@@ -182,12 +185,13 @@ ordersRouter.post("/select", requireRole("MANAGER"), async (req, res, next) => {
       });
     }
 
-    // 通知對應送貨人員（含沒有座標、未排進路線的派遣單）
+    // 通知對應送貨人員（含沒有座標、未排進路線的派遣單）——這次指派只發一則通知，不逐筆洗版
     const driver = await prisma.staff.findUnique({ where: { id: driverId } });
     if (driver) {
-      for (const id of [...routeResult.orderedStopRefIds, ...unroutedOrders.map((o) => o.id)]) {
+      const allAssignedIds = [...routeResult.orderedStopRefIds, ...unroutedOrders.map((o) => o.id)];
+      if (allAssignedIds.length > 0) {
         await prisma.notification.create({
-          data: { orderId: id, staffId: driver.id, message: "今日有新的配送任務已指派給你" },
+          data: { orderId: allAssignedIds[0], staffId: driver.id, message: "今天有新的配送任務已指派給你" },
         });
       }
       if (driver.lineGroupId) {
