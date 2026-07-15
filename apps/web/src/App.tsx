@@ -1,12 +1,15 @@
+import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate } from "react-router-dom";
-import { ChevronRight, Truck, User, Building2, LogOut } from "lucide-react";
+import { ChevronRight, Truck, User, Building2, LogOut, Bell } from "lucide-react";
 import BizSetup from "./pages/biz/BizSetup";
 import ManagerSelect from "./pages/logi/manager/ManagerSelect";
 import DriverRoute from "./pages/logi/driver/DriverRoute";
 import AdminHome from "./pages/admin/AdminHome";
 import Login from "./pages/Login";
+import Notifications from "./pages/Notifications";
 import { getAuthedStaff, isLoggedIn, clearSession } from "./lib/auth";
 import { C } from "./components/common";
+import { api } from "./api/client";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   if (!isLoggedIn()) return <Navigate to="/login" replace />;
@@ -24,6 +27,14 @@ function RequireRole({ role, children }: { role: string; children: JSX.Element }
 function HomePage() {
   const navigate = useNavigate();
   const staff = getAuthedStaff();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    api
+      .getNotifications()
+      .then((list) => setUnreadCount(list.filter((n) => !n.isRead).length))
+      .catch(() => {});
+  }, []);
 
   function handleLogout() {
     clearSession();
@@ -33,8 +44,23 @@ function HomePage() {
   return (
     <div>
       <div style={{ background: C.navy }} className="px-5 pt-8 pb-10 rounded-b-3xl text-white">
-        <div style={{ fontFamily: "Manrope", color: "#9FB0C9" }} className="text-[11px] font-bold tracking-wide mb-1">
-          ROUTE SCHEDULER
+        <div className="flex items-center justify-between mb-1">
+          <div style={{ fontFamily: "Manrope", color: "#9FB0C9" }} className="text-[11px] font-bold tracking-wide">
+            ROUTE SCHEDULER
+          </div>
+          {staff && (
+            <button onClick={() => navigate("/notifications")} className="relative p-1 -mr-1">
+              <Bell size={18} color="#fff" />
+              {unreadCount > 0 && (
+                <span
+                  style={{ background: C.danger }}
+                  className="absolute -top-0.5 -right-0.5 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5"
+                >
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+          )}
         </div>
         <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[22px] font-black leading-tight">
           路線排程系統
@@ -172,6 +198,14 @@ export default function App() {
                   <RequireRole role="ADMIN">
                     <AdminHome />
                   </RequireRole>
+                }
+              />
+              <Route
+                path="/notifications"
+                element={
+                  <RequireAuth>
+                    <Notifications />
+                  </RequireAuth>
                 }
               />
             </Routes>

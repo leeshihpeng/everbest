@@ -118,5 +118,7 @@ export const api = {
     fd.append("file", file);
     return uploadFile<{ createdCount: number; orderIds: string[]; errors: string[]; detectedHeaders: string[] }>("/orders/import", fd);
   },
-  getNotifications: () => request<any[]>("/notifications"),
+  getNotifications: () =>
+    request<{ id: string; orderId: string; message: string; isRead: boolean; createdAt: string }[]>("/notifications"),
+  markNotificationRead: (id: string) => request(`/notifications/${id}/read`, { method: "PATCH" }),
 };
