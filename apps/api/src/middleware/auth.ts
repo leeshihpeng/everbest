@@ -25,10 +25,11 @@ export function requireAuth(req: AuthedRequest, res: Response, next: NextFunctio
   }
 }
 
-/** 限定角色使用，例如 requireRole("MANAGER") */
-export function requireRole(role: string) {
+/** 限定角色使用，例如 requireRole("MANAGER") 或 requireRole(["ADMIN", "MANAGER"])（符合其中一個即可） */
+export function requireRole(role: string | string[]) {
+  const allowed = Array.isArray(role) ? role : [role];
   return (req: AuthedRequest, res: Response, next: NextFunction) => {
-    if (!req.staff?.roles.includes(role)) {
+    if (!req.staff || !allowed.some((r) => req.staff!.roles.includes(r))) {
       return res.status(403).json({ error: "沒有權限執行此操作" });
     }
     next();

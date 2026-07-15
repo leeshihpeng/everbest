@@ -6,12 +6,28 @@ import { parseDispatchOrderCsv, groupOrderRowsByCustomer, getCsvHeaders } from "
 import { geocodeAddress } from "../services/googleMaps";
 import { optimizeRoute } from "../services/routeOptimizer";
 import { pushLineMessage, formatRouteShareMessage } from "../services/lineNotify";
+import { rolesToArray } from "../utils/roles";
 
 const prisma = new PrismaClient();
 const upload = multer({ storage: multer.memoryStorage() });
 export const ordersRouter = Router();
 
 ordersRouter.use(requireAuth);
+
+// 派遣單建立／異動時通知對象：所有物流主管，以及送貨人員——
+// 若已指派特定送貨人員就只通知該人，否則（例如尚未指派）廣播給所有送貨人員
+async function notifyOrderStakeholders(orderId: string, message: string, assignedDriverId?: string | null) {
+  const allStaff = await prisma.staff.findMany();
+  const targets = allStaff.filter((s) => {
+    const roles = rolesToArray(s.roles);
+    if (roles.includes("MANAGER")) return true;
+    if (assignedDriverId) return s.id === assignedDriverId;
+    return roles.includes("DRIVER");
+  });
+  for (const s of targets) {
+    await prisma.notification.create({ data: { orderId, staffId: s.id, message } });
+  }
+}
 
 ordersRouter.get("/", async (req, res, next) => {
   try {
@@ -102,17 +118,8 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
       });
       created.push(order.id);
 
-      // 5.4：新增時狀態為「待處理」→ 通知所有物流主管
-      const managers = await prisma.staff.findMany({ where: { roles: { contains: "MANAGER" } } });
-      for (const m of managers) {
-        await prisma.notification.create({
-          data: {
-            orderId: order.id,
-            staffId: m.id,
-            message: `新派遣單待確認：${order.customerName}（${order.customerCode}）`,
-          },
-        });
-      }
+      // 5.4：新增時除了通知所有物流主管，也直接廣播給所有送貨人員（此時尚未指派特定人員）
+      await notifyOrderStakeholders(order.id, `新派遣單待確認：${order.customerName}（${order.customerCode}）`, null);
     }
 
     res.json({ createdCount: created.length, orderIds: created, errors, detectedHeaders: getCsvHeaders(req.file.buffer) });
@@ -236,8 +243,8 @@ ordersRouter.patch("/:id/status", async (req, res, next) => {
   }
 });
 
-// 出發前如有新增／修改內容（規格書 5.4）— 內勤異動派遣單
-ordersRouter.put("/:id", requireRole("ADMIN"), async (req: AuthedRequest, res, next) => {
+// 出發前如有新增／修改內容（規格書 5.4）— 內勤或物流主管都可異動派遣單
+ordersRouter.put("/:id", requireRole(["ADMIN", "MANAGER"]), async (req: AuthedRequest, res, next) => {
   try {
     const order = await prisma.dispatchOrder.findUnique({ where: { id: req.params.id } });
     if (!order) return res.status(404).json({ error: "找不到派遣單" });
@@ -264,24 +271,12 @@ ordersRouter.put("/:id", requireRole("ADMIN"), async (req: AuthedRequest, res, n
       },
     });
 
-    // 5.4：依目前狀態通知對應人員。已出發（DISPATCHED）者不再即時通知。
-    if (order.status === "PENDING") {
-      const managers = await prisma.staff.findMany({ where: { roles: { contains: "MANAGER" } } });
-      for (const m of managers) {
-        await prisma.notification.create({
-          data: { orderId: order.id, staffId: m.id, message: `派遣單已異動：${updated.customerName}` },
-        });
-      }
-    } else if (order.status === "SELECTED" && order.assignedDriverId) {
-      const targets = [order.assignedDriverId];
-      const managers = await prisma.staff.findMany({ where: { roles: { contains: "MANAGER" } } });
-      targets.push(...managers.map((m) => m.id));
-      for (const staffId of targets) {
-        await prisma.notification.create({
-          data: { orderId: order.id, staffId, message: `已指派的派遣單資料已更新，請重新確認路線：${updated.customerName}` },
-        });
-      }
-    }
+    // 5.4：派遣單如有異動，物流主管與送貨人員都要收到通知
+    // （已指派送貨人員的話只通知該人，否則廣播給所有送貨人員）
+    const message = order.assignedDriverId
+      ? `已指派的派遣單資料已更新，請重新確認路線：${updated.customerName}`
+      : `派遣單已異動：${updated.customerName}`;
+    await notifyOrderStakeholders(order.id, message, order.assignedDriverId);
 
     res.json(updated);
   } catch (err) {
