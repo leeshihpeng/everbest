@@ -79,6 +79,18 @@ model DispatchOrderItem {
   checked     Boolean       @default(false) // 送貨人員檢貨（裝車確認）完成標記
 }
 
+// 檢驗報告（PDF 檔案存於資料庫，供業務／主管預覽下載分享，主管可刪除）
+model InspectionReport {
+  id         String    @id @default(cuid())
+  fileName   String    // 產品名稱（不含 .pdf）
+  reportDate DateTime? // 報告日期（PDF 內標示；掃描檔無文字層時可能為空，由主管補填）
+  mimeType   String    @default("application/pdf")
+  sizeBytes  Int
+  content    Bytes     // PDF 檔案內容
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
 model Notification {
   id        String        @id @default(cuid())
   order     DispatchOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)

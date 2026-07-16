@@ -45,6 +45,25 @@ async function uploadFile<T>(path: string, formData: FormData): Promise<T> {
   return res.json();
 }
 
+// 帶授權標頭抓取二進位檔案（例如 PDF），回傳 Blob。避免把 token 放進 URL。
+async function fetchBlob(path: string): Promise<Blob> {
+  const token = getToken();
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+  if (!res.ok) throw new Error(`API 錯誤：${res.status}`);
+  return res.blob();
+}
+
+export interface InspectionReportMeta {
+  id: string;
+  fileName: string;
+  reportDate: string | null;
+  sizeBytes: number;
+  mimeType: string;
+  createdAt: string;
+}
+
 export const api = {
   login: (name: string, password: string) =>
     request<{ token: string; staff: { id: string; name: string; roles: string[] } }>("/auth/login", {
@@ -124,4 +143,9 @@ export const api = {
     request<{ id: string; orderId: string; message: string; isRead: boolean; createdAt: string }[]>("/notifications"),
   markNotificationRead: (id: string) => request(`/notifications/${id}/read`, { method: "PATCH" }),
   deleteNotification: (id: string) => request<void>(`/notifications/${id}`, { method: "DELETE" }),
+  getReports: () => request<InspectionReportMeta[]>("/reports"),
+  fetchReportBlob: (id: string) => fetchBlob(`/reports/${id}/file`),
+  updateReportDate: (id: string, reportDate: string | null) =>
+    request<InspectionReportMeta>(`/reports/${id}`, { method: "PATCH", body: JSON.stringify({ reportDate }) }),
+  deleteReport: (id: string) => request<void>(`/reports/${id}`, { method: "DELETE" }),
 };

@@ -8,6 +8,7 @@ import { ordersRouter } from "./routes/orders";
 import { routeRouter } from "./routes/route";
 import { notifyRouter } from "./routes/notify";
 import { settingsRouter } from "./routes/settings";
+import { reportsRouter } from "./routes/reports";
 import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -23,6 +24,7 @@ app.use("/orders", ordersRouter);
 app.use("/route", routeRouter);
 app.use("/notifications", notifyRouter);
 app.use("/settings", settingsRouter);
+app.use("/reports", reportsRouter);
 
 app.use(errorHandler);
 

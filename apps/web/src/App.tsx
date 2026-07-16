@@ -8,6 +8,7 @@ import DriverRoute from "./pages/logi/driver/DriverRoute";
 import AdminHome from "./pages/admin/AdminHome";
 import Login from "./pages/Login";
 import Notifications from "./pages/Notifications";
+import InspectionReports from "./pages/InspectionReports";
 import { getAuthedStaff, isLoggedIn, clearSession } from "./lib/auth";
 import { C, TopBar } from "./components/common";
 import { api } from "./api/client";
@@ -264,7 +265,7 @@ export default function App() {
                 path="/inspection"
                 element={
                   <RequireRole role={["SALES", "MANAGER"]}>
-                    <ComingSoon title="檢驗報告" />
+                    <InspectionReports />
                   </RequireRole>
                 }
               />
