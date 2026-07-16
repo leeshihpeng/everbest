@@ -247,7 +247,8 @@ ordersRouter.patch("/:id/status", async (req, res, next) => {
   }
 });
 
-// 送貨人員裝車前逐項檢貨標記
+// 送貨人員裝車前逐項檢貨標記。
+// 全部品項都檢貨完成 → 派遣單自動進入「已派送」；若又取消其中一項 → 退回「已勾選配送」。
 ordersRouter.patch("/items/:itemId/checked", async (req, res, next) => {
   try {
     const { checked } = req.body as { checked: boolean };
@@ -255,7 +256,24 @@ ordersRouter.patch("/items/:itemId/checked", async (req, res, next) => {
       where: { id: req.params.itemId },
       data: { checked },
     });
-    res.json(item);
+
+    const order = await prisma.dispatchOrder.findUnique({
+      where: { id: item.orderId },
+      include: { items: true },
+    });
+    let orderStatus = order?.status;
+    if (order) {
+      const allChecked = order.items.length > 0 && order.items.every((i) => i.checked);
+      if (allChecked && order.status === "SELECTED") {
+        await prisma.dispatchOrder.update({ where: { id: order.id }, data: { status: "DISPATCHED" } });
+        orderStatus = "DISPATCHED";
+      } else if (!allChecked && order.status === "DISPATCHED") {
+        await prisma.dispatchOrder.update({ where: { id: order.id }, data: { status: "SELECTED" } });
+        orderStatus = "SELECTED";
+      }
+    }
+
+    res.json({ ...item, orderStatus });
   } catch (err) {
     next(err);
   }

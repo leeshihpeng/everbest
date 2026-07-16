@@ -65,8 +65,10 @@ export default function DriverRoute() {
     }
     (async () => {
       try {
-        const [orderList, staffList, s] = await Promise.all([api.getOrders({ status: "SELECTED" }), api.getStaff(), api.getSettings()]);
-        setOrders(orderList.filter((o: Order) => o.assignedDriverId === me.id));
+        const [orderList, staffList, s] = await Promise.all([api.getOrders({}), api.getStaff(), api.getSettings()]);
+        setOrders(
+          orderList.filter((o: Order) => o.assignedDriverId === me.id && (o.status === "SELECTED" || o.status === "DISPATCHED"))
+        );
         setSelf(staffList.find((st: Staff) => st.id === me.id) ?? null);
         setSettings(s);
       } catch (err) {
@@ -134,8 +136,17 @@ export default function DriverRoute() {
     const item = order?.items.find((i) => i.id === itemId);
     if (!item) return;
     const nextChecked = !item.checked;
+    // 同步後端邏輯：全部品項檢貨完成 → 已派送；取消其中一項 → 退回已勾選配送
     setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, items: o.items.map((i) => (i.id === itemId ? { ...i, checked: nextChecked } : i)) } : o))
+      prev.map((o) => {
+        if (o.id !== orderId) return o;
+        const items = o.items.map((i) => (i.id === itemId ? { ...i, checked: nextChecked } : i));
+        const allChecked = items.length > 0 && items.every((i) => i.checked);
+        let status = o.status;
+        if (allChecked && status === "SELECTED") status = "DISPATCHED";
+        else if (!allChecked && status === "DISPATCHED") status = "SELECTED";
+        return { ...o, items, status };
+      })
     );
     try {
       await api.updateItemChecked(itemId, nextChecked);
