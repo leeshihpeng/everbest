@@ -211,7 +211,7 @@ export function RouteTimeline({
                               {p.name} ×{p.qty}
                             </span>
                             <span style={{ color: p.checked ? "rgba(255,255,255,0.85)" : C.danger }} className="text-[11px]">
-                              {p.checked ? "已完成" : "待完成"}
+                              {p.checked ? "已檢貨" : "待檢貨"}
                             </span>
                           </button>
                         ) : (

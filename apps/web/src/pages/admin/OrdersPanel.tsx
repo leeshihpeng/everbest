@@ -5,7 +5,7 @@ import { C, Checkbox } from "../../components/common";
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "待處理",
   SELECTED: "已勾選配送",
-  DISPATCHED: "已派送",
+  DISPATCHED: "已檢貨",
   COMPLETED: "已完成",
 };
 
