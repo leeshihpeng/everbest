@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate } from "react-router-dom";
-import { ChevronRight, Truck, User, Building2, LogOut, Bell } from "lucide-react";
+import { ChevronRight, Truck, User, Building2, LogOut, Bell, ArrowLeft, Map, ClipboardCheck, FileText, PackageSearch } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import BizSetup from "./pages/biz/BizSetup";
 import ManagerSelect from "./pages/logi/manager/ManagerSelect";
 import DriverRoute from "./pages/logi/driver/DriverRoute";
@@ -8,7 +9,7 @@ import AdminHome from "./pages/admin/AdminHome";
 import Login from "./pages/Login";
 import Notifications from "./pages/Notifications";
 import { getAuthedStaff, isLoggedIn, clearSession } from "./lib/auth";
-import { C } from "./components/common";
+import { C, TopBar } from "./components/common";
 import { api } from "./api/client";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
@@ -16,15 +17,103 @@ function RequireAuth({ children }: { children: JSX.Element }) {
   return children;
 }
 
-// 依角色限制頁面存取；沒有該角色就導回首頁（首頁只會顯示使用者有權限的入口）
-function RequireRole({ role, children }: { role: string; children: JSX.Element }) {
+// 依角色限制頁面存取；role 可為單一角色或多個角色（符合其中一個即可）。
+// 沒有權限就導回主目錄。
+function RequireRole({ role, children }: { role: string | string[]; children: JSX.Element }) {
   if (!isLoggedIn()) return <Navigate to="/login" replace />;
   const staff = getAuthedStaff();
-  if (!staff?.roles.includes(role)) return <Navigate to="/" replace />;
+  const allowed = Array.isArray(role) ? role : [role];
+  if (!staff || !allowed.some((r) => staff.roles.includes(r))) return <Navigate to="/" replace />;
   return children;
 }
 
-function HomePage() {
+// 三順主目錄 — 各應用系統的入口。路線排程系統所有登入者皆可進入（內部再依角色顯示模組）；
+// 檢驗報告／輸入許可證／貨運追蹤僅限業務(SALES)與主管(MANAGER)。
+function MainDirectory() {
+  const navigate = useNavigate();
+  const staff = getAuthedStaff();
+  const canBizSystems = !!staff && (staff.roles.includes("SALES") || staff.roles.includes("MANAGER"));
+
+  function handleLogout() {
+    clearSession();
+    navigate("/login");
+  }
+
+  const systems: { key: string; label: string; sub: string; icon: LucideIcon; to: string; color: string; soft: string; show: boolean }[] = [
+    { key: "route", label: "路線排程系統", sub: "業務／物流／送貨／內勤管理", icon: Map, to: "/route", color: C.logiAccent, soft: C.logiAccentSoft, show: true },
+    { key: "inspection", label: "檢驗報告", sub: "產品檢驗報告查詢與管理", icon: ClipboardCheck, to: "/inspection", color: C.bizAccent, soft: C.bizAccentSoft, show: canBizSystems },
+    { key: "permit", label: "輸入許可證", sub: "進口許可證申請與追蹤", icon: FileText, to: "/permit", color: C.gold, soft: C.goldSoft, show: canBizSystems },
+    { key: "tracking", label: "貨運追蹤", sub: "進出口貨運狀態追蹤", icon: PackageSearch, to: "/tracking", color: C.navy, soft: "#EDEFF2", show: canBizSystems },
+  ];
+
+  return (
+    <div>
+      <div style={{ background: C.navy }} className="px-5 pt-8 pb-10 rounded-b-3xl text-white">
+        <div style={{ fontFamily: "Manrope", color: "#9FB0C9" }} className="text-[11px] font-bold tracking-wide mb-1">
+          SANSHUN PORTAL
+        </div>
+        <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[22px] font-black leading-tight">
+          三順 主目錄
+        </div>
+        <div style={{ color: "#B7C2D6" }} className="text-[12px] mt-1 flex items-center justify-between">
+          <span>{staff ? `你好，${staff.name}` : ""}</span>
+          {staff && (
+            <button onClick={handleLogout} className="flex items-center gap-1 text-white/80">
+              <LogOut size={12} /> 登出
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="p-4 -mt-5">
+        {systems
+          .filter((s) => s.show)
+          .map((s) => {
+            const Icon = s.icon;
+            return (
+              <Link
+                key={s.key}
+                to={s.to}
+                className="w-full flex items-center gap-3 rounded-2xl p-4 mb-3 shadow-sm"
+                style={{ background: "#fff" }}
+              >
+                <div className="rounded-xl flex items-center justify-center" style={{ width: 46, height: 46, background: s.soft }}>
+                  <Icon size={22} color={s.color} />
+                </div>
+                <div className="text-left flex-1">
+                  <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[15px]">
+                    {s.label}
+                  </div>
+                  <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
+                    {s.sub}
+                  </div>
+                </div>
+                <ChevronRight size={18} color={C.muted} />
+              </Link>
+            );
+          })}
+      </div>
+    </div>
+  );
+}
+
+// 尚未開發的系統的佔位頁
+function ComingSoon({ title }: { title: string }) {
+  const navigate = useNavigate();
+  return (
+    <div>
+      <TopBar title={title} accent={C.navy} onBack={() => navigate("/")} />
+      <div className="p-8 text-center" style={{ color: C.muted }}>
+        <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[15px] font-bold mb-2">
+          功能開發中
+        </div>
+        <div className="text-[12px]">此系統即將上線，敬請期待。</div>
+      </div>
+    </div>
+  );
+}
+
+// 路線排程系統首頁 — 依角色顯示各操作模組（業務／物流主管／送貨人員／內勤後台）。
+function RouteSchedulerHome() {
   const navigate = useNavigate();
   const staff = getAuthedStaff();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -36,17 +125,17 @@ function HomePage() {
       .catch(() => {});
   }, []);
 
-  function handleLogout() {
-    clearSession();
-    navigate("/login");
-  }
-
   return (
     <div>
       <div style={{ background: C.navy }} className="px-5 pt-8 pb-10 rounded-b-3xl text-white">
         <div className="flex items-center justify-between mb-1">
-          <div style={{ fontFamily: "Manrope", color: "#9FB0C9" }} className="text-[11px] font-bold tracking-wide">
-            ROUTE SCHEDULER
+          <div className="flex items-center gap-2">
+            <button onClick={() => navigate("/")} className="p-1 -ml-1 rounded-full active:bg-white/15">
+              <ArrowLeft size={18} color="#fff" />
+            </button>
+            <div style={{ fontFamily: "Manrope", color: "#9FB0C9" }} className="text-[11px] font-bold tracking-wide">
+              ROUTE SCHEDULER
+            </div>
           </div>
           {staff && (
             <button onClick={() => navigate("/notifications")} className="relative p-1 -mr-1">
@@ -65,13 +154,8 @@ function HomePage() {
         <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[22px] font-black leading-tight">
           路線排程系統
         </div>
-        <div style={{ color: "#B7C2D6" }} className="text-[12px] mt-1 flex items-center justify-between">
-          <span>{staff ? `你好，${staff.name}` : "選擇今日操作身份"}</span>
-          {staff && (
-            <button onClick={handleLogout} className="flex items-center gap-1 text-white/80">
-              <LogOut size={12} /> 登出
-            </button>
-          )}
+        <div style={{ color: "#B7C2D6" }} className="text-[12px] mt-1">
+          {staff ? `你好，${staff.name}` : "選擇今日操作身份"}
         </div>
       </div>
       <div className="p-4 -mt-5">
@@ -164,8 +248,40 @@ export default function App() {
                 path="/"
                 element={
                   <RequireAuth>
-                    <HomePage />
+                    <MainDirectory />
                   </RequireAuth>
+                }
+              />
+              <Route
+                path="/route"
+                element={
+                  <RequireAuth>
+                    <RouteSchedulerHome />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/inspection"
+                element={
+                  <RequireRole role={["SALES", "MANAGER"]}>
+                    <ComingSoon title="檢驗報告" />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/permit"
+                element={
+                  <RequireRole role={["SALES", "MANAGER"]}>
+                    <ComingSoon title="輸入許可證" />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/tracking"
+                element={
+                  <RequireRole role={["SALES", "MANAGER"]}>
+                    <ComingSoon title="貨運追蹤" />
+                  </RequireRole>
                 }
               />
               <Route

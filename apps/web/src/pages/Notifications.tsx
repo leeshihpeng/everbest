@@ -63,7 +63,7 @@ export default function Notifications() {
 
   return (
     <div>
-      <TopBar title="通知" accent={C.navy} onBack={() => navigate("/")} />
+      <TopBar title="通知" accent={C.navy} onBack={() => navigate("/route")} />
       <div className="p-4">
         {loading && (
           <div className="text-center text-[13px] py-8" style={{ color: C.muted }}>

@@ -205,7 +205,7 @@ export default function BizSetup() {
   if (step === "setup") {
     return (
       <div>
-        <TopBar title="業務模式" accent={C.bizAccent} onBack={() => navigate("/")} />
+        <TopBar title="業務模式" accent={C.bizAccent} onBack={() => navigate("/route")} />
         <div className="p-4">
           <div style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.muted }} className="text-[12px] font-bold mb-2">
             出發地

@@ -14,7 +14,7 @@ export default function AdminHome() {
 
   return (
     <div>
-      <TopBar title="內勤後台" accent={C.navy} onBack={() => navigate("/")} />
+      <TopBar title="內勤後台" accent={C.navy} onBack={() => navigate("/route")} />
       <div className="px-4 pt-3 flex gap-2">
         {(
           [

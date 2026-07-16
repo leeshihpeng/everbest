@@ -126,7 +126,7 @@ export default function ManagerSelect() {
   if (route) {
     return (
       <div>
-        <TopBar title="已送出配送指派" accent={C.logiAccent} onBack={() => navigate("/")} />
+        <TopBar title="已送出配送指派" accent={C.logiAccent} onBack={() => navigate("/route")} />
         <div className="p-4">
           <div className="rounded-xl p-3 mb-4 flex items-start gap-2" style={{ background: C.logiAccentSoft }}>
             <CheckCircle2 size={18} color={C.logiAccent} className="mt-0.5" />
@@ -146,7 +146,7 @@ export default function ManagerSelect() {
             預設路線順序（公司 → 公司）
           </div>
           <RouteTimeline originLabel="公司" destinationLabel="公司" route={route} showProducts={true} accent={C.logiAccent} />
-          <button onClick={() => navigate("/")} style={{ background: C.logiAccent }} className="w-full text-white font-bold text-[14px] py-3 rounded-xl mt-4">
+          <button onClick={() => navigate("/route")} style={{ background: C.logiAccent }} className="w-full text-white font-bold text-[14px] py-3 rounded-xl mt-4">
             完成
           </button>
         </div>
@@ -156,7 +156,7 @@ export default function ManagerSelect() {
 
   return (
     <div>
-      <TopBar title="派遣單勾選（物流主管）" accent={C.logiAccent} onBack={() => navigate("/")} />
+      <TopBar title="派遣單勾選（物流主管）" accent={C.logiAccent} onBack={() => navigate("/route")} />
       <div className="px-4 pt-3 pb-2 flex items-center justify-between" style={{ color: C.muted, fontFamily: "'Noto Sans TC', sans-serif" }}>
         <div className="text-[12px]">待處理派遣單</div>
         {orders.length > 0 && (

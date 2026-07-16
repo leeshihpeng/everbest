@@ -197,7 +197,7 @@ export default function DriverRoute() {
       <TopBar
         title="今日配送名單（送貨人員）"
         accent={C.logiAccent}
-        onBack={() => navigate("/")}
+        onBack={() => navigate("/route")}
         right={
           <button className="relative p-1">
             <Bell size={18} />
