@@ -30,10 +30,10 @@ export default function Login() {
     <div className="p-4">
       <div style={{ background: C.navy }} className="px-5 pt-8 pb-10 rounded-b-3xl text-white">
         <div style={{ fontFamily: "Manrope", color: "#9FB0C9" }} className="text-[11px] font-bold tracking-wide mb-1">
-          ROUTE SCHEDULER
+          SANSOON PORTAL
         </div>
         <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[22px] font-black leading-tight">
-          路線排程系統
+          三順 主目錄
         </div>
         <div style={{ color: "#B7C2D6" }} className="text-[12px] mt-1">
           請登入

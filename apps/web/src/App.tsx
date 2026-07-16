@@ -50,7 +50,7 @@ function MainDirectory() {
     <div>
       <div style={{ background: C.navy }} className="px-5 pt-8 pb-10 rounded-b-3xl text-white">
         <div style={{ fontFamily: "Manrope", color: "#9FB0C9" }} className="text-[11px] font-bold tracking-wide mb-1">
-          SANSHUN PORTAL
+          SANSOON PORTAL
         </div>
         <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[22px] font-black leading-tight">
           三順 主目錄
