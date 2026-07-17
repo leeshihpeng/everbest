@@ -66,8 +66,8 @@ reportsRouter.patch("/:id", requireRole("MANAGER"), async (req, res, next) => {
   }
 });
 
-// 刪除檢驗報告 — 僅主管
-reportsRouter.delete("/:id", requireRole("MANAGER"), async (req, res, next) => {
+// 刪除檢驗報告 — 僅最高權限者（ADMIN：李世鵬、李世斌），物流主管不可刪除
+reportsRouter.delete("/:id", requireRole("ADMIN"), async (req, res, next) => {
   try {
     await prisma.inspectionReport.delete({ where: { id: req.params.id } });
     res.status(204).end();

@@ -13,6 +13,8 @@ export default function InspectionReports() {
   const navigate = useNavigate();
   const staff = getAuthedStaff();
   const isManager = !!staff?.roles.includes("MANAGER");
+  // 刪除報告僅限最高權限者（李世鵬、李世斌），物流主管不可刪除
+  const canDelete = !!staff?.roles.includes("ADMIN");
 
   const [years, setYears] = useState<{ year: number; count: number }[]>([]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
@@ -219,7 +221,7 @@ export default function InspectionReports() {
                 <ActionButton icon={Eye} label="預覽" color={C.bizAccent} disabled={busyId === r.id} onClick={() => handlePreview(r)} />
                 <ActionButton icon={Download} label="下載" color={C.logiAccent} disabled={busyId === r.id} onClick={() => handleDownload(r)} />
                 <ActionButton icon={Share2} label="分享" color={C.navy} disabled={busyId === r.id} onClick={() => handleShare(r)} />
-                {isManager && (
+                {canDelete && (
                   <ActionButton icon={Trash2} label="刪除" color={C.danger} disabled={busyId === r.id} onClick={() => handleDelete(r)} />
                 )}
               </div>
