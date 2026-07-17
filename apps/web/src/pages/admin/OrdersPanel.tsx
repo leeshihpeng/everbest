@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
+import { getAuthedStaff } from "../../lib/auth";
 import { C, Checkbox } from "../../components/common";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -26,7 +27,10 @@ interface Order {
   items: OrderItem[];
 }
 
+// 同時用於內勤後台與物流主管頁面。匯入／補座標／刪除在後端都限 ADMIN，
+// 因此非 ADMIN（例如只有 MANAGER 的徐文卿）只看得到清單與狀態篩選。
 export default function OrdersPanel() {
+  const isAdmin = !!getAuthedStaff()?.roles.includes("ADMIN");
   const [orders, setOrders] = useState<Order[]>([]);
   const [status, setStatus] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -131,6 +135,7 @@ export default function OrdersPanel() {
 
   return (
     <div className="p-4">
+      {isAdmin && (
       <div className="rounded-xl p-3 mb-4" style={{ background: "#fff", border: `1px solid ${C.hairline}` }}>
         <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[13px] mb-2">
           CSV 匯入派遣單（欄位：出貨日期,公司名稱,倉庫住址1,公司電話1,託運備註,訂貨數量之總計）
@@ -161,6 +166,7 @@ export default function OrdersPanel() {
           </div>
         )}
       </div>
+      )}
 
       <div className="flex gap-2 mb-3">
         {["", "PENDING", "SELECTED", "DISPATCHED", "COMPLETED"].map((s) => (
@@ -177,7 +183,7 @@ export default function OrdersPanel() {
 
       {error && <div className="text-[12px] mb-2" style={{ color: C.danger }}>{error}</div>}
 
-      {!loading && orders.some((o) => o.lat == null) && (
+      {isAdmin && !loading && orders.some((o) => o.lat == null) && (
         <div className="flex justify-end mb-2">
           <button
             onClick={handleGeocodeMissing}
@@ -200,7 +206,7 @@ export default function OrdersPanel() {
         </div>
       )}
 
-      {!loading && orders.length > 0 && (
+      {isAdmin && !loading && orders.length > 0 && (
         <div className="flex items-center justify-between mb-2">
           <button onClick={toggleSelectAll} className="flex items-center gap-1.5">
             <Checkbox checked={allSelected} />
@@ -225,9 +231,11 @@ export default function OrdersPanel() {
         <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.hairline}`, background: "#fff" }}>
           {orders.map((o) => (
             <div key={o.id} className="px-3 py-2 border-t first:border-t-0 flex items-start gap-2" style={{ borderColor: C.hairline }}>
-              <button onClick={() => toggleSelectOne(o.id)} className="mt-0.5 shrink-0">
-                <Checkbox checked={selected.has(o.id)} />
-              </button>
+              {isAdmin && (
+                <button onClick={() => toggleSelectOne(o.id)} className="mt-0.5 shrink-0">
+                  <Checkbox checked={selected.has(o.id)} />
+                </button>
+              )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -254,14 +262,16 @@ export default function OrdersPanel() {
                       {it.productName} ×{it.quantity}
                     </span>
                   ))}
-                  <button
-                    onClick={() => handleDelete(o.id)}
-                    disabled={deletingId === o.id}
-                    style={{ color: C.danger }}
-                    className="text-[11px] font-bold ml-auto px-2 py-0.5 disabled:opacity-60"
-                  >
-                    {deletingId === o.id ? "刪除中…" : "刪除"}
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleDelete(o.id)}
+                      disabled={deletingId === o.id}
+                      style={{ color: C.danger }}
+                      className="text-[11px] font-bold ml-auto px-2 py-0.5 disabled:opacity-60"
+                    >
+                      {deletingId === o.id ? "刪除中…" : "刪除"}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

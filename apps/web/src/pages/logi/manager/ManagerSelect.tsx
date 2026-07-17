@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 import { api } from "../../../api/client";
+import OrdersPanel from "../../admin/OrdersPanel";
 import { C, TopBar, Checkbox, RouteTimeline, TimelineRoute } from "../../../components/common";
 
 interface OrderItem {
@@ -46,6 +47,7 @@ export default function ManagerSelect() {
   const [route, setRoute] = useState<TimelineRoute | null>(null);
   const [driverName, setDriverName] = useState("");
   const [unrouted, setUnrouted] = useState<string[]>([]);
+  const [tab, setTab] = useState<"select" | "manage">("select");
 
   useEffect(() => {
     (async () => {
@@ -154,9 +156,41 @@ export default function ManagerSelect() {
     );
   }
 
+  const tabBar = (
+    <div className="px-4 pt-3 flex gap-2">
+      {(
+        [
+          ["select", "派遣單勾選"],
+          ["manage", "派遣單管理"],
+        ] as ["select" | "manage", string][]
+      ).map(([key, label]) => (
+        <button
+          key={key}
+          onClick={() => setTab(key)}
+          style={tab === key ? { background: C.logiAccent, color: "#fff" } : { color: C.muted, border: `1px solid ${C.hairline}` }}
+          className="px-3 py-1.5 rounded-full text-[12px] font-bold"
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  // 派遣單管理：沿用內勤後台的清單（含各狀態分頁）；匯入／刪除等僅 ADMIN 可見
+  if (tab === "manage") {
+    return (
+      <div>
+        <TopBar title="派遣單管理（物流主管）" accent={C.logiAccent} onBack={() => navigate("/route")} />
+        {tabBar}
+        <OrdersPanel />
+      </div>
+    );
+  }
+
   return (
     <div>
       <TopBar title="派遣單勾選（物流主管）" accent={C.logiAccent} onBack={() => navigate("/route")} />
+      {tabBar}
       <div className="px-4 pt-3 pb-2 flex items-center justify-between" style={{ color: C.muted, fontFamily: "'Noto Sans TC', sans-serif" }}>
         <div className="text-[12px]">待處理派遣單</div>
         {orders.length > 0 && (
