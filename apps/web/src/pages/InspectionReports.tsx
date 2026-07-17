@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, Download, Trash2, Share2, ChevronRight, FolderClosed } from "lucide-react";
+import { Eye, Download, Trash2, Share2, ChevronRight, FolderClosed, FolderPlus, Upload } from "lucide-react";
 import { api, InspectionReportMeta } from "../api/client";
 import { getAuthedStaff } from "../lib/auth";
 import { C, TopBar } from "../components/common";
@@ -22,6 +22,9 @@ export default function InspectionReports() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
 
   async function loadYears() {
     setLoading(true);
@@ -61,6 +64,47 @@ export default function InspectionReports() {
     setReports([]);
     setError(null);
     loadYears();
+  }
+
+  async function handleAddYear() {
+    const input = prompt("請輸入要新增的年份（西元年，例如 2027）");
+    if (!input) return;
+    const year = Number(input.trim());
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+      setError("年份格式不正確，請輸入 2000～2100 之間的西元年。");
+      return;
+    }
+    setError(null);
+    try {
+      await api.createReportYear(year);
+      await loadYears();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  // 匯入 PDF。在年份目錄內匯入時固定歸到該年份；在年份清單匯入則依報告日期自動分類。
+  async function handleImport() {
+    const files = Array.from(fileRef.current?.files ?? []);
+    if (files.length === 0) return;
+    setImporting(true);
+    setError(null);
+    setImportMsg(null);
+    try {
+      const result = await api.importReports(files, selectedYear ? { year: selectedYear } : {});
+      if (fileRef.current) fileRef.current.value = "";
+      const byYear = new Map<number, number>();
+      for (const i of result.imported) byYear.set(i.year, (byYear.get(i.year) ?? 0) + 1);
+      const summary = [...byYear.entries()].map(([y, n]) => `${y}年 ${n} 份`).join("、");
+      setImportMsg(result.importedCount > 0 ? `已匯入 ${result.importedCount} 份報告（${summary}）` : null);
+      if (result.errors.length > 0) setError(result.errors.join("；"));
+      if (selectedYear) await loadReports(selectedYear);
+      else await loadYears();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setImporting(false);
+    }
   }
 
   async function withBlob(r: InspectionReportMeta, action: (blob: Blob) => void | Promise<void>) {
@@ -150,6 +194,37 @@ export default function InspectionReports() {
         onBack={() => (selectedYear ? backToYears() : navigate("/"))}
       />
       <div className="p-4">
+        {canDelete && (
+          <div className="rounded-xl p-3 mb-3" style={{ background: "#fff", border: `1px solid ${C.hairline}` }}>
+            <div className="flex items-center justify-between mb-2">
+              <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[13px]">
+                {selectedYear ? `匯入報告到 ${selectedYear} 年` : "匯入檢驗報告（依報告日期自動分類年份）"}
+              </div>
+              {!selectedYear && (
+                <button onClick={handleAddYear} style={{ color: C.bizAccent }} className="flex items-center gap-1 text-[12px] font-bold">
+                  <FolderPlus size={14} /> 新增年份
+                </button>
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              <input ref={fileRef} type="file" accept=".pdf" multiple className="text-[12px] w-full min-w-0" />
+              <button
+                onClick={handleImport}
+                disabled={importing}
+                style={{ background: C.navy }}
+                className="w-full flex items-center justify-center gap-1.5 text-white text-[12px] font-bold px-3 py-2 rounded-lg disabled:opacity-60"
+              >
+                <Upload size={14} /> {importing ? "匯入中…" : "上傳"}
+              </button>
+            </div>
+            {importMsg && (
+              <div className="text-[12px] mt-2" style={{ color: C.logiAccent }}>
+                {importMsg}
+              </div>
+            )}
+          </div>
+        )}
+
         {error && (
           <div className="text-[12px] mb-2" style={{ color: C.danger }}>
             {error}

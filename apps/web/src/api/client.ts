@@ -145,6 +145,19 @@ export const api = {
   markNotificationRead: (id: string) => request(`/notifications/${id}/read`, { method: "PATCH" }),
   deleteNotification: (id: string) => request<void>(`/notifications/${id}`, { method: "DELETE" }),
   getReportYears: () => request<{ year: number; count: number }[]>("/reports/years"),
+  createReportYear: (year: number) =>
+    request<{ year: number; count: number }>("/reports/years", { method: "POST", body: JSON.stringify({ year }) }),
+  importReports: (files: File[], opts: { year?: number; reportDate?: string } = {}) => {
+    const fd = new FormData();
+    for (const f of files) fd.append("files", f);
+    if (opts.year) fd.append("year", String(opts.year));
+    if (opts.reportDate) fd.append("reportDate", opts.reportDate);
+    return uploadFile<{
+      importedCount: number;
+      imported: { fileName: string; year: number; reportDate: string | null }[];
+      errors: string[];
+    }>("/reports/import", fd);
+  },
   getReports: (year?: number) => request<InspectionReportMeta[]>(year ? `/reports?year=${year}` : "/reports"),
   fetchReportBlob: (id: string) => fetchBlob(`/reports/${id}/file`),
   updateReportDate: (id: string, reportDate: string | null) =>

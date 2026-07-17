@@ -79,6 +79,13 @@ model DispatchOrderItem {
   checked     Boolean       @default(false) // 送貨人員檢貨（裝車確認）完成標記
 }
 
+// 檢驗報告的年份目錄。可由最高權限者手動建立（可為空目錄），
+// 匯入報告時也會自動依報告日期建立對應年份。
+model ReportYear {
+  year      Int      @id
+  createdAt DateTime @default(now())
+}
+
 // 檢驗報告（PDF 檔案存於資料庫，供業務／主管預覽下載分享，主管可刪除）
 model InspectionReport {
   id         String    @id @default(cuid())

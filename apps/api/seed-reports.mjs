@@ -33,6 +33,9 @@ for (const dir of yearDirs) {
   const files = fs.readdirSync(dirPath).filter((f) => f.toLowerCase().endsWith(".pdf"));
   console.log(`\n[${dir.year}] ${files.length} 個 PDF`);
 
+  // 確保年份目錄存在（畫面上的年份分類以此為準）
+  await prisma.reportYear.upsert({ where: { year: dir.year }, update: {}, create: { year: dir.year } });
+
   for (const f of files) {
     const full = path.join(dirPath, f);
     const fileName = f.replace(/\.pdf$/i, "");
