@@ -101,6 +101,22 @@ model InspectionReport {
   @@index([year])
 }
 
+// 輸入許可證（PDF/圖檔存於資料庫）。依產品項目（category，對應來源資料夾名）分類，
+// 不分年份；同一產品內依 fileDate 由新到舊排序。
+model ImportPermit {
+  id        String   @id @default(cuid())
+  category  String   // 產品項目，例如「A 杏仁粒」（照抄資料夾名）
+  fileName  String   // 檔名（不含副檔名），照抄
+  fileDate  DateTime // 檔案日期：取自檔名中的民國日期，取不到則用上傳時間
+  mimeType  String   @default("application/pdf")
+  sizeBytes Int
+  content   Bytes
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}
+
 model Notification {
   id        String        @id @default(cuid())
   order     DispatchOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)

@@ -65,6 +65,16 @@ export interface InspectionReportMeta {
   createdAt: string;
 }
 
+export interface ImportPermitMeta {
+  id: string;
+  category: string;
+  fileName: string;
+  fileDate: string;
+  sizeBytes: number;
+  mimeType: string;
+  createdAt: string;
+}
+
 export const api = {
   login: (name: string, password: string) =>
     request<{ token: string; staff: { id: string; name: string; roles: string[] } }>("/auth/login", {
@@ -163,4 +173,18 @@ export const api = {
   updateReportDate: (id: string, reportDate: string | null) =>
     request<InspectionReportMeta>(`/reports/${id}`, { method: "PATCH", body: JSON.stringify({ reportDate }) }),
   deleteReport: (id: string) => request<void>(`/reports/${id}`, { method: "DELETE" }),
+  getPermitCategories: () => request<{ category: string; count: number }[]>("/permits/categories"),
+  getPermits: (category?: string) =>
+    request<ImportPermitMeta[]>(category ? `/permits?category=${encodeURIComponent(category)}` : "/permits"),
+  fetchPermitBlob: (id: string) => fetchBlob(`/permits/${id}/file`),
+  importPermits: (files: File[], category: string) => {
+    const fd = new FormData();
+    for (const f of files) fd.append("files", f);
+    fd.append("category", category);
+    return uploadFile<{ importedCount: number; imported: { fileName: string; fileDate: string }[]; errors: string[] }>(
+      "/permits/import",
+      fd
+    );
+  },
+  deletePermit: (id: string) => request<void>(`/permits/${id}`, { method: "DELETE" }),
 };

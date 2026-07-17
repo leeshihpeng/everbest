@@ -9,6 +9,7 @@ import AdminHome from "./pages/admin/AdminHome";
 import Login from "./pages/Login";
 import Notifications from "./pages/Notifications";
 import InspectionReports from "./pages/InspectionReports";
+import ImportPermits from "./pages/ImportPermits";
 import { getAuthedStaff, isLoggedIn, clearSession } from "./lib/auth";
 import { C, TopBar } from "./components/common";
 import { api } from "./api/client";
@@ -273,7 +274,7 @@ export default function App() {
                 path="/permit"
                 element={
                   <RequireRole role={["SALES", "MANAGER"]}>
-                    <ComingSoon title="輸入許可證" />
+                    <ImportPermits />
                   </RequireRole>
                 }
               />

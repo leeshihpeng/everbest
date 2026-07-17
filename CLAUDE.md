@@ -67,3 +67,9 @@
 - 檢驗報告 PDF 存在資料庫（`InspectionReport.content` bytea），不是檔案系統——Render 磁碟是暫存的。
 - 年份目錄 `ReportYear` 可獨立存在（允許空目錄），年份清單 = 目錄 ∪ 報告實際年份。
 - `apps/api/seed-reports.mjs` 是本機工具，掃 `C:\Claude\檢驗報告\20xx檢驗報告` 匯入；會保留主管手動填的日期。
+- 輸入許可證 `ImportPermit`：依**產品項目**（`category` = 來源資料夾名，如「A 杏仁粒」）分類，
+  **不分年份**；同項目內依 `fileDate` 由新到舊。權限與檢驗報告一致（讀 = SALES/MANAGER，上傳／刪除 = ADMIN）。
+  - `fileDate` 取自**檔名的民國日期**（「A 116 11 14」→ 2027-11-14，允許少空白如「11510 02」），
+    取不到才用檔案時間。檔名有多個日期時取第一個。
+  - 檔名／資料夾名一律**照抄**，不要自作聰明改寫或重新分類。
+  - `apps/api/seed-permits.mjs` 掃 `C:\Claude\輸入許可證`；會略過 Thumbs.db／desktop.ini，支援 PDF 與圖檔。
