@@ -57,11 +57,20 @@ async function fetchBlob(path: string): Promise<Blob> {
 
 export interface InspectionReportMeta {
   id: string;
+  year: number;
   fileName: string;
   reportDate: string | null;
   sizeBytes: number;
   mimeType: string;
+  shareToken: string;
   createdAt: string;
+}
+
+// 對外公開的報告連結（客戶不需登入即可開啟），供 LINE／Email 分享使用。
+// 開發時 BASE_URL 是相對路徑 "/api"，要補上目前網域才會是完整網址。
+export function publicReportUrl(shareToken: string): string {
+  const base = BASE_URL.startsWith("http") ? BASE_URL : `${window.location.origin}${BASE_URL}`;
+  return `${base}/public/reports/${shareToken}`;
 }
 
 export const api = {
@@ -143,7 +152,8 @@ export const api = {
     request<{ id: string; orderId: string; message: string; isRead: boolean; createdAt: string }[]>("/notifications"),
   markNotificationRead: (id: string) => request(`/notifications/${id}/read`, { method: "PATCH" }),
   deleteNotification: (id: string) => request<void>(`/notifications/${id}`, { method: "DELETE" }),
-  getReports: () => request<InspectionReportMeta[]>("/reports"),
+  getReportYears: () => request<{ year: number; count: number }[]>("/reports/years"),
+  getReports: (year?: number) => request<InspectionReportMeta[]>(year ? `/reports?year=${year}` : "/reports"),
   fetchReportBlob: (id: string) => fetchBlob(`/reports/${id}/file`),
   updateReportDate: (id: string, reportDate: string | null) =>
     request<InspectionReportMeta>(`/reports/${id}`, { method: "PATCH", body: JSON.stringify({ reportDate }) }),

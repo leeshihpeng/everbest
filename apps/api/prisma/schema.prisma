@@ -82,13 +82,17 @@ model DispatchOrderItem {
 // 檢驗報告（PDF 檔案存於資料庫，供業務／主管預覽下載分享，主管可刪除）
 model InspectionReport {
   id         String    @id @default(cuid())
+  year       Int       // 報告年份分類（對應「2026檢驗報告」等資料夾）
   fileName   String    // 產品名稱（不含 .pdf）
   reportDate DateTime? // 報告日期（PDF 內標示；掃描檔無文字層時可能為空，由主管補填）
   mimeType   String    @default("application/pdf")
   sizeBytes  Int
   content    Bytes     // PDF 檔案內容
+  shareToken String    @unique // 對外公開連結用的隨機識別碼（供 LINE／Email 分享給客戶）
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+
+  @@index([year])
 }
 
 model Notification {

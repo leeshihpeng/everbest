@@ -1,13 +1,15 @@
-// 將本機 C:\Claude\檢驗報告\2026檢驗報告 下的 PDF 檢驗報告匯入正式資料庫。
-// 報告日期以 pdftotext 從 PDF 第 1~2 頁抓第一個 YYYY/MM/DD（掃描檔無文字層則留空，由主管補填）。
-// 可重複執行：同檔名會更新內容與日期，不會重複建立。
+// 將本機 C:\Claude\檢驗報告 下各年度資料夾（例如 2026檢驗報告、2027檢驗報告）的 PDF 匯入正式資料庫。
+// 年份取自資料夾名稱開頭的西元年；報告日期以 pdftotext 從 PDF 第 1~2 頁抓第一個 YYYY/MM/DD
+// （掃描檔無文字層則留空，由主管在畫面上補填）。
+// 可重複執行：同年份+同檔名會更新內容，不會重複建立；已補填過的日期不會被覆蓋掉。
 import { PrismaClient } from "@prisma/client";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import { execSync } from "child_process";
 
 const prisma = new PrismaClient();
-const DIR = "C:/Claude/檢驗報告/2026檢驗報告";
+const ROOT = "C:/Claude/檢驗報告";
 
 function extractReportDate(fullPath) {
   try {
@@ -19,29 +21,54 @@ function extractReportDate(fullPath) {
   }
 }
 
-const files = fs.readdirSync(DIR).filter((f) => f.toLowerCase().endsWith(".pdf"));
-console.log(`找到 ${files.length} 個 PDF`);
+// 找出所有以西元年開頭的年度資料夾
+const yearDirs = fs
+  .readdirSync(ROOT, { withFileTypes: true })
+  .filter((d) => d.isDirectory() && /^20[0-9]{2}/.test(d.name))
+  .map((d) => ({ name: d.name, year: Number(d.name.match(/^(20[0-9]{2})/)[1]) }));
 
-for (const f of files) {
-  const full = path.join(DIR, f);
-  const fileName = f.replace(/\.pdf$/i, "");
-  const content = fs.readFileSync(full);
-  const reportDate = extractReportDate(full);
+console.log(`找到 ${yearDirs.length} 個年度資料夾：${yearDirs.map((d) => d.name).join("、")}`);
 
-  const existing = await prisma.inspectionReport.findFirst({ where: { fileName } });
-  if (existing) {
-    await prisma.inspectionReport.update({
-      where: { id: existing.id },
-      data: { content, sizeBytes: content.length, reportDate: reportDate ?? existing.reportDate, mimeType: "application/pdf" },
-    });
-    console.log(`更新：${fileName}（${reportDate ? reportDate.toISOString().slice(0, 10) : "日期由主管補填"}，${(content.length / 1024).toFixed(0)}KB）`);
-  } else {
-    await prisma.inspectionReport.create({
-      data: { fileName, content, sizeBytes: content.length, reportDate, mimeType: "application/pdf" },
-    });
-    console.log(`新增：${fileName}（${reportDate ? reportDate.toISOString().slice(0, 10) : "日期由主管補填"}，${(content.length / 1024).toFixed(0)}KB）`);
+for (const dir of yearDirs) {
+  const dirPath = path.join(ROOT, dir.name);
+  const files = fs.readdirSync(dirPath).filter((f) => f.toLowerCase().endsWith(".pdf"));
+  console.log(`\n[${dir.year}] ${files.length} 個 PDF`);
+
+  for (const f of files) {
+    const full = path.join(dirPath, f);
+    const fileName = f.replace(/\.pdf$/i, "");
+    const content = fs.readFileSync(full);
+    const reportDate = extractReportDate(full);
+
+    const existing = await prisma.inspectionReport.findFirst({ where: { year: dir.year, fileName } });
+    if (existing) {
+      await prisma.inspectionReport.update({
+        where: { id: existing.id },
+        data: {
+          content,
+          sizeBytes: content.length,
+          // 抓不到日期時保留既有（可能是主管手動補填的），不要蓋掉
+          reportDate: reportDate ?? existing.reportDate,
+          mimeType: "application/pdf",
+        },
+      });
+      console.log(`  更新：${fileName}（${(reportDate ?? existing.reportDate)?.toISOString().slice(0, 10) ?? "日期待補填"}）`);
+    } else {
+      await prisma.inspectionReport.create({
+        data: {
+          year: dir.year,
+          fileName,
+          content,
+          sizeBytes: content.length,
+          reportDate,
+          mimeType: "application/pdf",
+          shareToken: crypto.randomBytes(16).toString("hex"),
+        },
+      });
+      console.log(`  新增：${fileName}（${reportDate ? reportDate.toISOString().slice(0, 10) : "日期待補填"}）`);
+    }
   }
 }
 
-console.log("完成");
+console.log("\n完成");
 await prisma.$disconnect();

@@ -7,11 +7,27 @@ export const reportsRouter = Router();
 
 reportsRouter.use(requireAuth);
 
-// 檢驗報告列表（僅回中繼資料，不含檔案內容）— 業務與主管皆可
-reportsRouter.get("/", requireRole(["SALES", "MANAGER"]), async (_req, res, next) => {
+// 年份分類清單（每年幾份報告）— 業務與主管皆可
+reportsRouter.get("/years", requireRole(["SALES", "MANAGER"]), async (_req, res, next) => {
   try {
+    const grouped = await prisma.inspectionReport.groupBy({
+      by: ["year"],
+      _count: { _all: true },
+      orderBy: { year: "desc" },
+    });
+    res.json(grouped.map((g) => ({ year: g.year, count: g._count._all })));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 檢驗報告列表（僅回中繼資料，不含檔案內容）；可用 ?year=2026 篩選 — 業務與主管皆可
+reportsRouter.get("/", requireRole(["SALES", "MANAGER"]), async (req, res, next) => {
+  try {
+    const year = req.query.year ? Number(req.query.year) : undefined;
     const reports = await prisma.inspectionReport.findMany({
-      select: { id: true, fileName: true, reportDate: true, sizeBytes: true, mimeType: true, createdAt: true },
+      where: year ? { year } : {},
+      select: { id: true, year: true, fileName: true, reportDate: true, sizeBytes: true, mimeType: true, shareToken: true, createdAt: true },
       orderBy: { fileName: "asc" },
     });
     res.json(reports);
@@ -42,7 +58,7 @@ reportsRouter.patch("/:id", requireRole("MANAGER"), async (req, res, next) => {
     const report = await prisma.inspectionReport.update({
       where: { id: req.params.id },
       data: { reportDate: reportDate ? new Date(reportDate) : null },
-      select: { id: true, fileName: true, reportDate: true, sizeBytes: true, mimeType: true, createdAt: true },
+      select: { id: true, year: true, fileName: true, reportDate: true, sizeBytes: true, mimeType: true, shareToken: true, createdAt: true },
     });
     res.json(report);
   } catch (err) {
