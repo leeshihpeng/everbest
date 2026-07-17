@@ -88,7 +88,6 @@ model InspectionReport {
   mimeType   String    @default("application/pdf")
   sizeBytes  Int
   content    Bytes     // PDF 檔案內容
-  shareToken String    @unique // 對外公開連結用的隨機識別碼（供 LINE／Email 分享給客戶）
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 

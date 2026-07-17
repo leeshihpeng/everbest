@@ -9,7 +9,6 @@ import { routeRouter } from "./routes/route";
 import { notifyRouter } from "./routes/notify";
 import { settingsRouter } from "./routes/settings";
 import { reportsRouter } from "./routes/reports";
-import { publicRouter } from "./routes/publicReports";
 import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -26,7 +25,6 @@ app.use("/route", routeRouter);
 app.use("/notifications", notifyRouter);
 app.use("/settings", settingsRouter);
 app.use("/reports", reportsRouter);
-app.use("/public", publicRouter); // 不需登入，供分享連結使用
 
 app.use(errorHandler);
 

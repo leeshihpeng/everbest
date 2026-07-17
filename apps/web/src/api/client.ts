@@ -62,15 +62,7 @@ export interface InspectionReportMeta {
   reportDate: string | null;
   sizeBytes: number;
   mimeType: string;
-  shareToken: string;
   createdAt: string;
-}
-
-// 對外公開的報告連結（客戶不需登入即可開啟），供 LINE／Email 分享使用。
-// 開發時 BASE_URL 是相對路徑 "/api"，要補上目前網域才會是完整網址。
-export function publicReportUrl(shareToken: string): string {
-  const base = BASE_URL.startsWith("http") ? BASE_URL : `${window.location.origin}${BASE_URL}`;
-  return `${base}/public/reports/${shareToken}`;
 }
 
 export const api = {

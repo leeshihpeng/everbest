@@ -27,7 +27,7 @@ reportsRouter.get("/", requireRole(["SALES", "MANAGER"]), async (req, res, next)
     const year = req.query.year ? Number(req.query.year) : undefined;
     const reports = await prisma.inspectionReport.findMany({
       where: year ? { year } : {},
-      select: { id: true, year: true, fileName: true, reportDate: true, sizeBytes: true, mimeType: true, shareToken: true, createdAt: true },
+      select: { id: true, year: true, fileName: true, reportDate: true, sizeBytes: true, mimeType: true, createdAt: true },
       orderBy: { fileName: "asc" },
     });
     res.json(reports);
@@ -58,7 +58,7 @@ reportsRouter.patch("/:id", requireRole("MANAGER"), async (req, res, next) => {
     const report = await prisma.inspectionReport.update({
       where: { id: req.params.id },
       data: { reportDate: reportDate ? new Date(reportDate) : null },
-      select: { id: true, year: true, fileName: true, reportDate: true, sizeBytes: true, mimeType: true, shareToken: true, createdAt: true },
+      select: { id: true, year: true, fileName: true, reportDate: true, sizeBytes: true, mimeType: true, createdAt: true },
     });
     res.json(report);
   } catch (err) {

@@ -1,18 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, Download, Trash2, MessageCircle, Mail, ChevronRight, FolderClosed } from "lucide-react";
-import { api, InspectionReportMeta, publicReportUrl } from "../api/client";
+import { Eye, Download, Trash2, Share2, ChevronRight, FolderClosed } from "lucide-react";
+import { api, InspectionReportMeta } from "../api/client";
 import { getAuthedStaff } from "../lib/auth";
 import { C, TopBar } from "../components/common";
 
 function fmtDate(iso: string | null): string {
   return iso ? iso.slice(0, 10).replace(/-/g, "/") : "";
-}
-
-// 分享給客戶的訊息內容（含公開連結）
-function shareMessage(r: InspectionReportMeta): string {
-  const date = r.reportDate ? `（報告日期 ${fmtDate(r.reportDate)}）` : "";
-  return `${r.fileName} 檢驗報告${date}\n${publicReportUrl(r.shareToken)}`;
 }
 
 export default function InspectionReports() {
@@ -88,29 +82,38 @@ export default function InspectionReports() {
     });
   }
 
+  function triggerDownload(blob: Blob, fileName: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${fileName}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
   function handleDownload(r: InspectionReportMeta) {
-    withBlob(r, (blob) => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${r.fileName}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    withBlob(r, (blob) => triggerDownload(blob, r.fileName));
+  }
+
+  // 直接把 PDF 檔案交給手機的系統分享清單（可選 LINE、郵件等 App 夾帶檔案送出，
+  // 實際送出仍由使用者在該 App 確認）。電腦版瀏覽器多不支援，改為下載讓使用者自行附加。
+  function handleShare(r: InspectionReportMeta) {
+    withBlob(r, async (blob) => {
+      const file = new File([blob], `${r.fileName}.pdf`, { type: "application/pdf" });
+      const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean };
+      if (nav.canShare && nav.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: `${r.fileName} 檢驗報告` });
+        } catch {
+          // 使用者自行取消分享，不算錯誤
+        }
+      } else {
+        triggerDownload(blob, r.fileName);
+        setError("此裝置（多為電腦版瀏覽器）不支援直接分享檔案，已改為下載，請自行附加到 LINE 或郵件。");
+      }
     });
-  }
-
-  // 開啟 LINE 分享（帶入報告名稱、日期與公開連結，實際送出仍由使用者在 LINE 確認）
-  function handleShareLine(r: InspectionReportMeta) {
-    window.open(`https://line.me/R/msg/text/?${encodeURIComponent(shareMessage(r))}`, "_blank");
-  }
-
-  // 開啟郵件軟體並帶入內容（實際寄出仍由使用者確認）
-  function handleShareMail(r: InspectionReportMeta) {
-    const subject = encodeURIComponent(`${r.fileName} 檢驗報告`);
-    const body = encodeURIComponent(shareMessage(r));
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
   }
 
   async function handleDelete(r: InspectionReportMeta) {
@@ -215,8 +218,7 @@ export default function InspectionReports() {
               <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                 <ActionButton icon={Eye} label="預覽" color={C.bizAccent} disabled={busyId === r.id} onClick={() => handlePreview(r)} />
                 <ActionButton icon={Download} label="下載" color={C.logiAccent} disabled={busyId === r.id} onClick={() => handleDownload(r)} />
-                <ActionButton icon={MessageCircle} label="LINE" color="#06C755" disabled={false} onClick={() => handleShareLine(r)} />
-                <ActionButton icon={Mail} label="Email" color={C.navy} disabled={false} onClick={() => handleShareMail(r)} />
+                <ActionButton icon={Share2} label="分享" color={C.navy} disabled={busyId === r.id} onClick={() => handleShare(r)} />
                 {isManager && (
                   <ActionButton icon={Trash2} label="刪除" color={C.danger} disabled={busyId === r.id} onClick={() => handleDelete(r)} />
                 )}

@@ -5,7 +5,6 @@
 import { PrismaClient } from "@prisma/client";
 import fs from "fs";
 import path from "path";
-import crypto from "crypto";
 import { execSync } from "child_process";
 
 const prisma = new PrismaClient();
@@ -55,15 +54,7 @@ for (const dir of yearDirs) {
       console.log(`  更新：${fileName}（${(reportDate ?? existing.reportDate)?.toISOString().slice(0, 10) ?? "日期待補填"}）`);
     } else {
       await prisma.inspectionReport.create({
-        data: {
-          year: dir.year,
-          fileName,
-          content,
-          sizeBytes: content.length,
-          reportDate,
-          mimeType: "application/pdf",
-          shareToken: crypto.randomBytes(16).toString("hex"),
-        },
+        data: { year: dir.year, fileName, content, sizeBytes: content.length, reportDate, mimeType: "application/pdf" },
       });
       console.log(`  新增：${fileName}（${reportDate ? reportDate.toISOString().slice(0, 10) : "日期待補填"}）`);
     }
