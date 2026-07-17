@@ -12,9 +12,9 @@ function fmtDate(iso: string | null): string {
 export default function InspectionReports() {
   const navigate = useNavigate();
   const staff = getAuthedStaff();
-  const isManager = !!staff?.roles.includes("MANAGER");
-  // 刪除報告僅限最高權限者（李世鵬、李世斌），物流主管不可刪除
-  const canDelete = !!staff?.roles.includes("ADMIN");
+  // 匯入、修改報告日期、刪除皆僅限最高權限者（李世鵬、李世斌）；
+  // 物流主管只能預覽／下載／分享
+  const canManage = !!staff?.roles.includes("ADMIN");
 
   const [years, setYears] = useState<{ year: number; count: number }[]>([]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
@@ -194,7 +194,7 @@ export default function InspectionReports() {
         onBack={() => (selectedYear ? backToYears() : navigate("/"))}
       />
       <div className="p-4">
-        {canDelete && (
+        {canManage && (
           <div className="rounded-xl p-3 mb-3" style={{ background: "#fff", border: `1px solid ${C.hairline}` }}>
             <div className="flex items-center justify-between mb-2">
               <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[13px]">
@@ -278,7 +278,7 @@ export default function InspectionReports() {
                 <span style={{ color: C.muted }} className="text-[11px]">
                   報告日期
                 </span>
-                {isManager ? (
+                {canManage ? (
                   <input
                     type="date"
                     value={r.reportDate ? r.reportDate.slice(0, 10) : ""}
@@ -296,7 +296,7 @@ export default function InspectionReports() {
                 <ActionButton icon={Eye} label="預覽" color={C.bizAccent} disabled={busyId === r.id} onClick={() => handlePreview(r)} />
                 <ActionButton icon={Download} label="下載" color={C.logiAccent} disabled={busyId === r.id} onClick={() => handleDownload(r)} />
                 <ActionButton icon={Share2} label="分享" color={C.navy} disabled={busyId === r.id} onClick={() => handleShare(r)} />
-                {canDelete && (
+                {canManage && (
                   <ActionButton icon={Trash2} label="刪除" color={C.danger} disabled={busyId === r.id} onClick={() => handleDelete(r)} />
                 )}
               </div>

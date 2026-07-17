@@ -144,8 +144,8 @@ reportsRouter.get("/:id/file", requireRole(["SALES", "MANAGER"]), async (req, re
   }
 });
 
-// 更新報告日期（例如補填掃描檔缺少的日期）— 僅主管
-reportsRouter.patch("/:id", requireRole("MANAGER"), async (req, res, next) => {
+// 更新報告日期（例如補填掃描檔缺少的日期）— 僅最高權限者（ADMIN：李世鵬、李世斌）
+reportsRouter.patch("/:id", requireRole("ADMIN"), async (req, res, next) => {
   try {
     const { reportDate } = req.body as { reportDate: string | null };
     const report = await prisma.inspectionReport.update({
