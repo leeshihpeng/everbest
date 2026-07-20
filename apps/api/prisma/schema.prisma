@@ -117,6 +117,33 @@ model ImportPermit {
   @@index([category])
 }
 
+// 貨運追蹤：新竹／大榮託運明細，依收件地址分北中南三區。
+// 欄位涵蓋兩家業者，各自畫面只顯示自己有的欄位（保留原始報表風格）。
+model Shipment {
+  id          String   @id @default(cuid())
+  carrier     String   // 新竹貨運 / 大榮貨運
+  region      String   // 北部 / 中部 / 南部 / 未分類
+  shipDate    DateTime // 發送（託運）日期
+  seq         Int? // 序（大榮）
+  trackingNo  String // 查貨號碼 / 託運單號
+  station     String // 到著站 / 到站
+  stationCode String? // 站碼 / 簡碼
+  recipient   String
+  pieces      Int
+  weight      Float
+  cbm         Float? // 才數（大榮）
+  voucher     String? // 傳票區分（新竹）
+  cod         Float? // 代收貨款（大榮）
+  phone       String?
+  address     String
+  orderNo     String?
+  note        String? // 內容品 / 備註
+  createdAt   DateTime @default(now())
+
+  @@unique([carrier, trackingNo])
+  @@index([carrier, region])
+}
+
 model Notification {
   id        String        @id @default(cuid())
   order     DispatchOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)

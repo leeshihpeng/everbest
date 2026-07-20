@@ -75,6 +75,27 @@ export interface ImportPermitMeta {
   createdAt: string;
 }
 
+export interface ShipmentRow {
+  id: string;
+  carrier: string;
+  region: string;
+  shipDate: string;
+  seq: number | null;
+  trackingNo: string;
+  station: string;
+  stationCode: string | null;
+  recipient: string;
+  pieces: number;
+  weight: number;
+  cbm: number | null;
+  voucher: string | null;
+  cod: number | null;
+  phone: string | null;
+  address: string;
+  orderNo: string | null;
+  note: string | null;
+}
+
 export const api = {
   login: (name: string, password: string) =>
     request<{ token: string; staff: { id: string; name: string; roles: string[] } }>("/auth/login", {
@@ -187,4 +208,18 @@ export const api = {
     );
   },
   deletePermit: (id: string) => request<void>(`/permits/${id}`, { method: "DELETE" }),
+  getShipmentFolders: () => request<{ region: string; carrier: string; count: number }[]>("/shipments/folders"),
+  getShipments: (carrier: string, region: string) =>
+    request<ShipmentRow[]>(`/shipments?carrier=${encodeURIComponent(carrier)}&region=${encodeURIComponent(region)}`),
+  importShipments: (files: File[]) => {
+    const fd = new FormData();
+    for (const f of files) fd.append("files", f);
+    return uploadFile<{
+      imported: number;
+      updated: number;
+      unclassified: number;
+      summary: Record<string, number>;
+      errors: string[];
+    }>("/shipments/import", fd);
+  },
 };

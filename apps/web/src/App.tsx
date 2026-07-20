@@ -10,8 +10,9 @@ import Login from "./pages/Login";
 import Notifications from "./pages/Notifications";
 import InspectionReports from "./pages/InspectionReports";
 import ImportPermits from "./pages/ImportPermits";
+import ShipmentTracking from "./pages/ShipmentTracking";
 import { getAuthedStaff, isLoggedIn, clearSession, isDriverOnly } from "./lib/auth";
-import { C, TopBar } from "./components/common";
+import { C } from "./components/common";
 import { api } from "./api/client";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
@@ -96,22 +97,6 @@ function MainDirectory() {
               </Link>
             );
           })}
-      </div>
-    </div>
-  );
-}
-
-// 尚未開發的系統的佔位頁
-function ComingSoon({ title }: { title: string }) {
-  const navigate = useNavigate();
-  return (
-    <div>
-      <TopBar title={title} accent={C.navy} onBack={() => navigate("/")} />
-      <div className="p-8 text-center" style={{ color: C.muted }}>
-        <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[15px] font-bold mb-2">
-          功能開發中
-        </div>
-        <div className="text-[12px]">此系統即將上線，敬請期待。</div>
       </div>
     </div>
   );
@@ -285,7 +270,7 @@ export default function App() {
                 path="/tracking"
                 element={
                   <RequireRole role={["SALES", "MANAGER"]}>
-                    <ComingSoon title="貨運追蹤" />
+                    <ShipmentTracking />
                   </RequireRole>
                 }
               />
