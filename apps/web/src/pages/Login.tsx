@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
-import { setSession } from "../lib/auth";
+import { setSession, landingPath } from "../lib/auth";
 import { C } from "../components/common";
 
 export default function Login() {
@@ -18,7 +18,7 @@ export default function Login() {
     try {
       const { token, staff } = await api.login(name, password);
       setSession(token, staff);
-      navigate("/");
+      navigate(landingPath(staff.roles));
     } catch (err) {
       setError((err as Error).message);
     } finally {

@@ -63,7 +63,8 @@ export default function Notifications() {
 
   return (
     <div>
-      <TopBar title="通知" accent={C.navy} onBack={() => navigate("/route")} />
+      {/* 回到來源頁：主管來自路線排程首頁，送貨人員來自今日配送名單 */}
+      <TopBar title="通知" accent={C.navy} onBack={() => navigate(-1)} />
       <div className="p-4">
         {loading && (
           <div className="text-center text-[13px] py-8" style={{ color: C.muted }}>

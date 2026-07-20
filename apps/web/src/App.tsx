@@ -10,7 +10,7 @@ import Login from "./pages/Login";
 import Notifications from "./pages/Notifications";
 import InspectionReports from "./pages/InspectionReports";
 import ImportPermits from "./pages/ImportPermits";
-import { getAuthedStaff, isLoggedIn, clearSession } from "./lib/auth";
+import { getAuthedStaff, isLoggedIn, clearSession, isDriverOnly } from "./lib/auth";
 import { C, TopBar } from "./components/common";
 import { api } from "./api/client";
 
@@ -35,6 +35,9 @@ function MainDirectory() {
   const navigate = useNavigate();
   const staff = getAuthedStaff();
   const canBizSystems = !!staff && (staff.roles.includes("SALES") || staff.roles.includes("MANAGER"));
+
+  // 只送貨的人在主目錄沒有其他可選項目，直接帶到今日配送名單
+  if (staff && isDriverOnly(staff.roles)) return <Navigate to="/logi/driver" replace />;
 
   function handleLogout() {
     clearSession();

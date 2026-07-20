@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Check } from "lucide-react";
+import { Bell, Check, LogOut } from "lucide-react";
 import { api } from "../../../api/client";
-import { getAuthedStaff } from "../../../lib/auth";
+import { getAuthedStaff, isDriverOnly, clearSession } from "../../../lib/auth";
 import { C, TopBar, Pill, RouteTimeline, ActionRow, TimelineRoute, ProductSummary } from "../../../components/common";
 import { buildNavigationUrl } from "../../../lib/googleMapsLoader";
 
@@ -43,6 +43,7 @@ interface Settings {
 export default function DriverRoute() {
   const navigate = useNavigate();
   const me = getAuthedStaff();
+  const driverOnly = !!me && isDriverOnly(me.roles);
 
   const [origin, setOrigin] = useState<"company" | "home">("company");
   const [destination, setDestination] = useState<"company" | "home">("company");
@@ -53,6 +54,7 @@ export default function DriverRoute() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [route, setRoute] = useState<TimelineRoute | null>(null);
   const [routeStops, setRouteStops] = useState<Order[]>([]); // 已排序好的停靠站，供「開始導航」使用
   const [routeLoading, setRouteLoading] = useState(false);
@@ -77,6 +79,10 @@ export default function DriverRoute() {
         setLoading(false);
       }
     })();
+    api
+      .getNotifications()
+      .then((list) => setUnreadCount(list.filter((n) => !n.isRead).length))
+      .catch(() => {});
   }, []);
 
   const assignedOrders = useMemo(() => orders.filter((o) => !completed.has(o.id)), [orders, completed]);
@@ -197,12 +203,33 @@ export default function DriverRoute() {
       <TopBar
         title="今日配送名單（送貨人員）"
         accent={C.logiAccent}
-        onBack={() => navigate("/route")}
+        // 只送貨的人是直接登入到這一頁的，沒有上一層可回；改在右側提供登出
+        onBack={driverOnly ? undefined : () => navigate("/route")}
         right={
-          <button className="relative p-1">
-            <Bell size={18} />
-            <span style={{ background: C.danger }} className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button onClick={() => navigate("/notifications")} className="relative p-1">
+              <Bell size={18} />
+              {unreadCount > 0 && (
+                <span
+                  style={{ background: C.danger }}
+                  className="absolute -top-0.5 -right-0.5 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5"
+                >
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+            {driverOnly && (
+              <button
+                onClick={() => {
+                  clearSession();
+                  navigate("/login");
+                }}
+                className="flex items-center gap-1 p-1 text-white/90 text-[12px] font-bold"
+              >
+                <LogOut size={14} /> 登出
+              </button>
+            )}
+          </div>
         }
       />
       <div className="p-4">
