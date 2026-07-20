@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Bell, Check } from "lucide-react";
 import { api } from "../../../api/client";
 import { getAuthedStaff } from "../../../lib/auth";
-import { C, TopBar, Pill, RouteTimeline, ActionRow, TimelineRoute } from "../../../components/common";
+import { C, TopBar, Pill, RouteTimeline, ActionRow, TimelineRoute, ProductSummary } from "../../../components/common";
 import { buildNavigationUrl } from "../../../lib/googleMapsLoader";
 
 interface OrderItem {
@@ -228,6 +228,16 @@ export default function DriverRoute() {
 
         {routeLoading && <div className="text-center text-[13px] py-4" style={{ color: C.muted }}>路線計算中…</div>}
         {routeError && <div className="text-center text-[13px] py-2" style={{ color: C.danger }}>{routeError}</div>}
+
+        {/* 今日要載的貨品總量（含尚未送達的派遣單），方便裝車前清點 */}
+        {orders.length > 0 && (
+          <ProductSummary
+            title="今日配送貨品總計"
+            items={orders.flatMap((o) => o.items)}
+            orderCount={orders.length}
+            accent={C.logiAccent}
+          />
+        )}
 
         {route && (
           <>

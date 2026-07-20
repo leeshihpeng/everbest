@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 import { api } from "../../../api/client";
 import OrdersPanel from "../../admin/OrdersPanel";
-import { C, TopBar, Checkbox, RouteTimeline, TimelineRoute } from "../../../components/common";
+import { C, TopBar, Checkbox, RouteTimeline, TimelineRoute, ProductSummary } from "../../../components/common";
 
 interface OrderItem {
   productName: string;
@@ -71,6 +71,10 @@ export default function ManagerSelect() {
     s.has(id) ? s.delete(id) : s.add(id);
     setSelected(s);
   };
+  // 尚未勾選時先顯示全部待處理的總計，勾選後只算已勾選的——兩者數量本來就不同
+  const summaryOrders = selected.size > 0 ? orders.filter((o) => selected.has(o.id)) : orders;
+  const summaryTitle = selected.size > 0 ? `已勾選貨品總計（${selected.size} 筆）` : "待處理貨品總計（尚未勾選）";
+
   const allSelected = orders.length > 0 && selected.size === orders.length;
   const toggleSelectAll = () => {
     setSelected(allSelected ? new Set() : new Set(orders.map((o) => o.id)));
@@ -144,6 +148,12 @@ export default function ManagerSelect() {
               <div className="text-[11px] mt-1">請到內勤後台「派遣單」補齊座標後，送貨人員頁面會自動重新排入路線。</div>
             </div>
           )}
+          <ProductSummary
+            title="本次配送貨品總計"
+            items={orders.filter((o) => selected.has(o.id)).flatMap((o) => o.items)}
+            orderCount={selected.size}
+            accent={C.logiAccent}
+          />
           <div style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.muted }} className="text-[12px] font-bold mb-2">
             預設路線順序（公司 → 公司）
           </div>
@@ -222,6 +232,9 @@ export default function ManagerSelect() {
         </div>
       )}
       <div className="px-4 pb-28">
+        {orders.length > 0 && (
+          <ProductSummary title={summaryTitle} items={summaryOrders.flatMap((o) => o.items)} orderCount={summaryOrders.length} accent={C.logiAccent} />
+        )}
         {orders.map((o) => {
           const isSel = selected.has(o.id);
           const isPriority = priorityOverride.has(o.id);

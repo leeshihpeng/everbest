@@ -115,6 +115,69 @@ export function OriginCard({
   );
 }
 
+export interface SummaryItem {
+  productName: string;
+  quantity: number;
+}
+
+/** 貨品數量統計表：把多張派遣單的品項加總（同品名合併），方便清點與裝車。
+ *  傳入的 items 決定統計範圍——例如只傳已勾選的派遣單，總計就只算已勾選的。 */
+export function ProductSummary({
+  items,
+  title,
+  accent,
+  orderCount,
+}: {
+  items: SummaryItem[];
+  title: string;
+  accent: string;
+  orderCount?: number;
+}) {
+  const map = new Map<string, number>();
+  for (const it of items) map.set(it.productName, (map.get(it.productName) ?? 0) + it.quantity);
+  const rows = [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-Hant"));
+  const total = rows.reduce((sum, [, qty]) => sum + qty, 0);
+
+  return (
+    <div className="rounded-xl mb-3 overflow-hidden" style={{ background: "#fff", border: `1px solid ${C.hairline}` }}>
+      <div className="px-3 py-2 flex items-center justify-between gap-2" style={{ background: C.bg }}>
+        <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[12px] font-bold">
+          {title}
+        </span>
+        {orderCount != null && (
+          <span style={{ color: C.muted }} className="text-[11px] shrink-0">
+            {orderCount} 筆派遣單
+          </span>
+        )}
+      </div>
+      {rows.length === 0 ? (
+        <div className="px-3 py-3 text-center text-[12px]" style={{ color: C.muted }}>
+          沒有貨品
+        </div>
+      ) : (
+        <>
+          {rows.map(([name, qty]) => (
+            <div key={name} className="px-3 py-1.5 flex items-center justify-between gap-2 border-t" style={{ borderColor: C.hairline }}>
+              <span className="text-[12px] flex-1 min-w-0 break-all">{name}</span>
+              <span style={{ fontFamily: "Manrope", color: accent }} className="text-[13px] font-bold shrink-0">
+                {qty}
+              </span>
+            </div>
+          ))}
+          <div className="px-3 py-2 flex items-center justify-between border-t" style={{ borderColor: C.hairline, background: C.bg }}>
+            <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[12px] font-bold">
+              全部貨品總計
+            </span>
+            <span style={{ fontFamily: "Manrope", color: accent }} className="text-[15px] font-extrabold">
+              {total}
+            </span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export interface TimelineProduct {
   name: string;
   qty: number;

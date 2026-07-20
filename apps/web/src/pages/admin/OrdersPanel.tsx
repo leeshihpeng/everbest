@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { getAuthedStaff } from "../../lib/auth";
-import { C, Checkbox } from "../../components/common";
+import { C, Checkbox, ProductSummary } from "../../components/common";
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "待處理",
@@ -182,6 +182,16 @@ export default function OrdersPanel() {
       </div>
 
       {error && <div className="text-[12px] mb-2" style={{ color: C.danger }}>{error}</div>}
+
+      {/* 統計範圍跟著上方狀態篩選走，所以「待處理」與「已勾選配送」的總計本來就會不同 */}
+      {!loading && orders.length > 0 && (
+        <ProductSummary
+          title={`貨品數量統計（${status ? STATUS_LABELS[status] : "全部"}）`}
+          items={orders.flatMap((o) => o.items)}
+          orderCount={orders.length}
+          accent={C.navy}
+        />
+      )}
 
       {isAdmin && !loading && orders.some((o) => o.lat == null) && (
         <div className="flex justify-end mb-2">
