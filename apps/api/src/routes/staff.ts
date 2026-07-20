@@ -1,7 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
-import { requireAuth, requireRole } from "../middleware/auth";
+import { requireAuth, requireRole, AuthedRequest } from "../middleware/auth";
 import { StaffRole, validateStaffRoles } from "@route-scheduler/shared-types";
 import { geocodeAddress } from "../services/googleMaps";
 import { rolesToArray, rolesToString } from "../utils/roles";
@@ -11,12 +11,24 @@ export const staffRouter = Router();
 
 staffRouter.use(requireAuth);
 
-staffRouter.get("/", async (_req, res, next) => {
+staffRouter.get("/", async (req: AuthedRequest, res, next) => {
   try {
     const staff = await prisma.staff.findMany({
       select: { id: true, name: true, roles: true, homeAddress: true, homeLat: true, homeLng: true, lineGroupId: true, salesRegions: true },
     });
-    res.json(staff.map((s) => ({ ...s, roles: rolesToArray(s.roles), salesRegions: s.salesRegions ? s.salesRegions.split(",") : [] })));
+
+    // 住家地址與 LINE 群組屬個資／內部資訊：主管與內勤看得到全部；
+    // 其他人（例如送貨人員）只拿得到自己的完整資料，別人的僅保留姓名與角色。
+    const roles = req.staff?.roles ?? [];
+    const seesAll = roles.includes("MANAGER") || roles.includes("ADMIN");
+
+    res.json(
+      staff.map((s) => {
+        const base = { ...s, roles: rolesToArray(s.roles), salesRegions: s.salesRegions ? s.salesRegions.split(",") : [] };
+        if (seesAll || s.id === req.staff?.id) return base;
+        return { ...base, homeAddress: "", homeLat: null, homeLng: null, lineGroupId: null, salesRegions: [] };
+      })
+    );
   } catch (err) {
     next(err);
   }

@@ -1,14 +1,25 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { randomBytes } from "crypto";
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
+// 正式環境一定要自己設 JWT_SECRET。若允許沿用預設值，任何知道這串（原本寫在公開原始碼裡）
+// 的人都能自行簽出管理員 token，等同完全繞過登入，所以缺少時直接讓服務啟動失敗。
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("缺少環境變數 JWT_SECRET，為避免使用可預測的密鑰簽發登入憑證，服務不予啟動。");
+  }
+  console.warn("[警告] 未設定 JWT_SECRET，本機開發暫用隨機密鑰（每次重啟都會讓既有登入失效）。");
+}
+// 本機沒設就用隨機值，確保絕不會有一組寫死在原始碼裡的共用密鑰
+const SECRET = JWT_SECRET ?? randomBytes(32).toString("hex");
 
 export interface AuthedRequest extends Request {
   staff?: { id: string; name: string; roles: string[] };
 }
 
 export function signStaffToken(staff: { id: string; name: string; roles: string[] }): string {
-  return jwt.sign(staff, JWT_SECRET, { expiresIn: "30d" });
+  return jwt.sign(staff, SECRET, { expiresIn: "30d" });
 }
 
 export function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
@@ -17,7 +28,7 @@ export function requireAuth(req: AuthedRequest, res: Response, next: NextFunctio
     return res.status(401).json({ error: "未登入" });
   }
   try {
-    const payload = jwt.verify(header.slice(7), JWT_SECRET) as AuthedRequest["staff"];
+    const payload = jwt.verify(header.slice(7), SECRET) as AuthedRequest["staff"];
     req.staff = payload;
     next();
   } catch {

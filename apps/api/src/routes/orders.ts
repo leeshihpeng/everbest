@@ -9,7 +9,7 @@ import { pushLineMessage, formatRouteShareMessage } from "../services/lineNotify
 import { rolesToArray } from "../utils/roles";
 
 const prisma = new PrismaClient();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
 export const ordersRouter = Router();
 
 ordersRouter.use(requireAuth);
@@ -233,14 +233,32 @@ ordersRouter.delete("/:id", requireRole("ADMIN"), async (req, res, next) => {
   }
 });
 
+/** 送貨人員只能動指派給自己的派遣單；物流主管與內勤不受限。
+ *  沒有這層檢查的話，任何登入者都能把別人的派遣單標成已完成。 */
+type OrderAccess = { ok: true } | { ok: false; status: number; error: string };
+
+async function assertCanModifyOrder(req: AuthedRequest, orderId: string): Promise<OrderAccess> {
+  const order = await prisma.dispatchOrder.findUnique({ where: { id: orderId } });
+  if (!order) return { ok: false, status: 404, error: "找不到派遣單" };
+
+  const roles = req.staff?.roles ?? [];
+  if (roles.includes("MANAGER") || roles.includes("ADMIN")) return { ok: true };
+  if (order.assignedDriverId && order.assignedDriverId === req.staff?.id) return { ok: true };
+  return { ok: false, status: 403, error: "只能操作指派給你的派遣單" };
+}
+
 // 更新派遣單狀態（例如送貨人員標記完成）
-ordersRouter.patch("/:id/status", async (req, res, next) => {
+ordersRouter.patch("/:id/status", async (req: AuthedRequest, res, next) => {
   try {
     const { status } = req.body as { status: "DISPATCHED" | "COMPLETED" };
-    const order = await prisma.dispatchOrder.update({
-      where: { id: req.params.id },
-      data: { status },
-    });
+    if (status !== "DISPATCHED" && status !== "COMPLETED") {
+      return res.status(400).json({ error: "狀態值不正確" });
+    }
+
+    const check = await assertCanModifyOrder(req, req.params.id);
+    if (!check.ok) return res.status(check.status).json({ error: check.error });
+
+    const order = await prisma.dispatchOrder.update({ where: { id: req.params.id }, data: { status } });
     res.json(order);
   } catch (err) {
     next(err);
@@ -249,9 +267,16 @@ ordersRouter.patch("/:id/status", async (req, res, next) => {
 
 // 送貨人員裝車前逐項檢貨標記。
 // 全部品項都檢貨完成 → 派遣單自動進入「已派送」；若又取消其中一項 → 退回「已勾選配送」。
-ordersRouter.patch("/items/:itemId/checked", async (req, res, next) => {
+ordersRouter.patch("/items/:itemId/checked", async (req: AuthedRequest, res, next) => {
   try {
     const { checked } = req.body as { checked: boolean };
+    if (typeof checked !== "boolean") return res.status(400).json({ error: "檢貨狀態值不正確" });
+
+    const target = await prisma.dispatchOrderItem.findUnique({ where: { id: req.params.itemId } });
+    if (!target) return res.status(404).json({ error: "找不到品項" });
+    const check = await assertCanModifyOrder(req, target.orderId);
+    if (!check.ok) return res.status(check.status).json({ error: check.error });
+
     const item = await prisma.dispatchOrderItem.update({
       where: { id: req.params.itemId },
       data: { checked },

@@ -6,7 +6,7 @@ import { parseCustomerExcel, extractCity, getSheetHeaders } from "../services/im
 import { geocodeAddress } from "../services/googleMaps";
 
 const prisma = new PrismaClient();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
 export const customersRouter = Router();
 
 customersRouter.use(requireAuth);
