@@ -216,10 +216,11 @@ export const api = {
     for (const f of files) fd.append("files", f);
     return uploadFile<{
       imported: number;
-      updated: number;
+      replaced: number;
       unclassified: number;
       summary: Record<string, number>;
       errors: string[];
     }>("/shipments/import", fd);
   },
+  deleteShipment: (id: string) => request<void>(`/shipments/${id}`, { method: "DELETE" }),
 };

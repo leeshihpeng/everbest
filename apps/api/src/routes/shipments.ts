@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { PrismaClient } from "@prisma/client";
 import { requireAuth, requireRole, AuthedRequest } from "../middleware/auth";
-import { parseShipmentPdf, regionOfAddress, UNCLASSIFIED } from "../services/shipmentParser";
+import { parseShipmentPdf, regionOfAddress, UNCLASSIFIED, ParsedShipment } from "../services/shipmentParser";
 
 const prisma = new PrismaClient();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
@@ -89,11 +89,13 @@ shipmentsRouter.post("/import", requireRole("ADMIN"), upload.array("files"), asy
     const customers = await prisma.customer.findMany({ select: { name: true, city: true } });
     const cityByName = new Map(customers.map((c) => [c.name, c.city]));
 
-    let imported = 0;
-    let updated = 0;
     let unclassified = 0;
     const errors: string[] = [];
     const summary: Record<string, number> = {};
+
+    // 這兩份報表每天各上傳一次，代表當日全量。先全部解析成功再整批取代該業者的舊資料，
+    // 解析失敗就不動舊資料，避免把好的資料清掉卻換不到新的。
+    const byCarrier = new Map<string, ParsedShipment[]>();
 
     for (const f of files) {
       if (!/\.pdf$/i.test(f.originalname)) {
@@ -104,11 +106,11 @@ shipmentsRouter.post("/import", requireRole("ADMIN"), upload.array("files"), asy
       try {
         rows = await parseShipmentPdf(f.buffer);
       } catch (e) {
-        errors.push(`${f.originalname}: 解析失敗（${(e as Error).message}）`);
+        errors.push(`${f.originalname}: 解析失敗（${(e as Error).message}），該業者原有資料保持不變`);
         continue;
       }
       if (rows.length === 0) {
-        errors.push(`${f.originalname}: 讀不到任何託運資料，請確認是新竹或大榮的託運報表`);
+        errors.push(`${f.originalname}: 讀不到任何託運資料，請確認是新竹或大榮的託運報表；該業者原有資料保持不變`);
         continue;
       }
 
@@ -122,23 +124,23 @@ shipmentsRouter.post("/import", requireRole("ADMIN"), upload.array("files"), asy
           region = UNCLASSIFIED;
           unclassified++;
         }
-
-        const data = { ...r, region };
-        const existing = await prisma.shipment.findUnique({
-          where: { carrier_trackingNo: { carrier: r.carrier, trackingNo: r.trackingNo } },
-        });
-        if (existing) {
-          await prisma.shipment.update({ where: { id: existing.id }, data });
-          updated++;
-        } else {
-          await prisma.shipment.create({ data });
-          imported++;
-        }
+        const list = byCarrier.get(r.carrier) ?? [];
+        list.push({ ...r, region });
+        byCarrier.set(r.carrier, list);
         summary[`${region} ${r.carrier}`] = (summary[`${region} ${r.carrier}`] ?? 0) + 1;
       }
     }
 
-    res.json({ imported, updated, unclassified, summary, errors });
+    let imported = 0;
+    let replaced = 0;
+    for (const [carrier, rows] of byCarrier) {
+      const removed = await prisma.shipment.deleteMany({ where: { carrier } });
+      replaced += removed.count;
+      await prisma.shipment.createMany({ data: rows });
+      imported += rows.length;
+    }
+
+    res.json({ imported, replaced, unclassified, summary, errors });
   } catch (err) {
     next(err);
   }

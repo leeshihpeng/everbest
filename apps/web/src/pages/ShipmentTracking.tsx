@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, FolderClosed, Upload, Truck } from "lucide-react";
+import { ChevronRight, FolderClosed, Upload, Truck, Trash2 } from "lucide-react";
 import { api, ShipmentRow } from "../api/client";
 import { getAuthedStaff } from "../lib/auth";
 import { C, TopBar } from "../components/common";
@@ -81,7 +81,7 @@ export default function ShipmentTracking() {
       if (fileRef.current) fileRef.current.value = "";
       const parts = Object.entries(r.summary).map(([k, v]) => `${k} ${v} 筆`);
       setImportMsg(
-        `已匯入 ${r.imported} 筆、更新 ${r.updated} 筆` +
+        `已清除舊資料 ${r.replaced} 筆，匯入 ${r.imported} 筆` +
           (parts.length ? `（${parts.join("、")}）` : "") +
           (r.unclassified > 0 ? `；其中 ${r.unclassified} 筆地址判不出區域，已歸入「未分類」` : "")
       );
@@ -91,6 +91,17 @@ export default function ShipmentTracking() {
       setError((err as Error).message);
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function handleDelete(r: ShipmentRow) {
+    if (!confirm(`確定要刪除「${r.recipient}」這筆託運（${r.trackingNo}）嗎？`)) return;
+    setError(null);
+    try {
+      await api.deleteShipment(r.id);
+      setRows((prev) => prev.filter((x) => x.id !== r.id));
+    } catch (err) {
+      setError((err as Error).message);
     }
   }
 
@@ -235,6 +246,18 @@ export default function ShipmentTracking() {
                 {r.note && (
                   <div className="mt-1.5 text-[11px] px-2 py-1 rounded" style={{ background: C.logiAccentSoft, color: C.logiAccent }}>
                     {isHsinchu ? "內容品" : "備註"}：{r.note}
+                  </div>
+                )}
+
+                {canManage && (
+                  <div className="flex justify-end mt-1.5">
+                    <button
+                      onClick={() => handleDelete(r)}
+                      style={{ border: `1px solid ${C.danger}`, color: C.danger }}
+                      className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg"
+                    >
+                      <Trash2 size={12} /> 刪除
+                    </button>
                   </div>
                 )}
               </div>
