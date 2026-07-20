@@ -96,6 +96,27 @@ export interface ShipmentRow {
   note: string | null;
 }
 
+export interface QuoteItem {
+  id: string;
+  sortOrder: number;
+  code: string;
+  productName: string;
+  brand: string;
+  spec: string;
+  price: string;
+  validDate: string;
+  note: string;
+}
+
+export interface QuoteSheet {
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedAt: string;
+  uploadedBy: string | null;
+  items: QuoteItem[];
+}
+
 export const api = {
   login: (name: string, password: string) =>
     request<{ token: string; staff: { id: string; name: string; roles: string[] } }>("/auth/login", {
@@ -223,4 +244,11 @@ export const api = {
     }>("/shipments/import", fd);
   },
   deleteShipment: (id: string) => request<void>(`/shipments/${id}`, { method: "DELETE" }),
+  getQuoteSheet: () => request<QuoteSheet | null>("/quotes"),
+  fetchQuoteBlob: () => fetchBlob("/quotes/file"),
+  uploadQuoteSheet: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return uploadFile<{ itemCount: number; fileName: string }>("/quotes", fd);
+  },
 };

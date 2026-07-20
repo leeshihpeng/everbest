@@ -87,6 +87,11 @@
     取不到才用檔案時間。檔名有多個日期時取第一個。
   - 檔名／資料夾名一律**照抄**，不要自作聰明改寫或重新分類。
   - `apps/api/seed-permits.mjs` 掃 `C:\Claude\輸入許可證`；會略過 Thumbs.db／desktop.ini，支援 PDF 與圖檔。
+- 產品報價單 `QuoteSheet`（固定 id `singleton`）＋ `QuoteItem`：**永遠只有一份**，上傳即整份覆蓋。
+  讀取＝SALES／MANAGER，上傳＝ADMIN。同時保存原始 PDF 與解析出的表格。
+  - 解析在 `src/services/quoteParser.ts`。**表格是自動判讀，少數列會有落差**
+    （原始 PDF 排版所致，例如 B253、MA4G、PEC），所以畫面上有明確標註「以原始檔為準」，
+    且一定要保留預覽／下載原始檔的入口——**不要拿掉這個安全網**，報錯價會直接影響客戶。
 - 貨物追蹤 `Shipment`：新竹／大榮託運報表 PDF，六個目錄 = 業者(2) × 區域(3)，各自保留原報表欄位風格。
   - 解析在 `src/services/shipmentParser.ts`（伺服器端 pdf-parse）。報表右邊界會把長公司名／單號**折行**，
     已用「中文接中文才黏合」處理，改動解析器時務必用真檔驗證。

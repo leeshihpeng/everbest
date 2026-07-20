@@ -11,6 +11,7 @@ import { settingsRouter } from "./routes/settings";
 import { reportsRouter } from "./routes/reports";
 import { permitsRouter } from "./routes/permits";
 import { shipmentsRouter } from "./routes/shipments";
+import { quotesRouter } from "./routes/quotes";
 import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -59,6 +60,7 @@ app.use("/settings", settingsRouter);
 app.use("/reports", reportsRouter);
 app.use("/permits", permitsRouter);
 app.use("/shipments", shipmentsRouter);
+app.use("/quotes", quotesRouter);
 
 app.use(errorHandler);
 

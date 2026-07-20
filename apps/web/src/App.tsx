@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate } from "react-router-dom";
-import { ChevronRight, Truck, User, Building2, LogOut, Bell, ArrowLeft, Map, ClipboardCheck, FileText, PackageSearch } from "lucide-react";
+import { ChevronRight, Truck, User, Building2, LogOut, Bell, ArrowLeft, Map, ClipboardCheck, FileText, PackageSearch, Tags } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import BizSetup from "./pages/biz/BizSetup";
 import ManagerSelect from "./pages/logi/manager/ManagerSelect";
@@ -11,6 +11,7 @@ import Notifications from "./pages/Notifications";
 import InspectionReports from "./pages/InspectionReports";
 import ImportPermits from "./pages/ImportPermits";
 import ShipmentTracking from "./pages/ShipmentTracking";
+import QuoteSheetPage from "./pages/QuoteSheetPage";
 import { getAuthedStaff, isLoggedIn, clearSession, isDriverOnly } from "./lib/auth";
 import { C } from "./components/common";
 import { api } from "./api/client";
@@ -50,6 +51,7 @@ function MainDirectory() {
     { key: "inspection", label: "檢驗報告", sub: "產品檢驗報告查詢與管理", icon: ClipboardCheck, to: "/inspection", color: C.bizAccent, soft: C.bizAccentSoft, show: canBizSystems },
     { key: "permit", label: "輸入許可證", sub: "進口許可證申請與追蹤", icon: FileText, to: "/permit", color: C.gold, soft: C.goldSoft, show: canBizSystems },
     { key: "tracking", label: "貨運追蹤", sub: "進出口貨運狀態追蹤", icon: PackageSearch, to: "/tracking", color: C.navy, soft: "#EDEFF2", show: canBizSystems },
+    { key: "quote", label: "產品報價單", sub: "產品項目、規格與價格查詢", icon: Tags, to: "/quote", color: C.logiAccent, soft: C.logiAccentSoft, show: canBizSystems },
   ];
 
   return (
@@ -271,6 +273,14 @@ export default function App() {
                 element={
                   <RequireRole role={["SALES", "MANAGER"]}>
                     <ShipmentTracking />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/quote"
+                element={
+                  <RequireRole role={["SALES", "MANAGER"]}>
+                    <QuoteSheetPage />
                   </RequireRole>
                 }
               />
