@@ -12,6 +12,9 @@ const prisma = new PrismaClient();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
 export const ordersRouter = Router();
 
+// 交給貨運行配送的派遣單；SELF 代表自家送貨人員
+export const CARRIERS = ["新竹貨運", "大榮貨運"];
+
 ordersRouter.use(requireAuth);
 
 // 派遣單建立／異動時通知對象：所有物流主管，以及送貨人員——
@@ -29,11 +32,14 @@ async function notifyOrderStakeholders(orderId: string, message: string, assigne
   }
 }
 
+// 未指定 carrier 時只回自家配送（SELF），確保原有的物流主管／送貨人員流程
+// 不會混入交給貨運行的派遣單
 ordersRouter.get("/", async (req, res, next) => {
   try {
-    const { date, status } = req.query as { date?: string; status?: string };
+    const { date, status, carrier } = req.query as { date?: string; status?: string; carrier?: string };
     const orders = await prisma.dispatchOrder.findMany({
       where: {
+        carrier: carrier || "SELF",
         ...(date ? { deliveryDate: new Date(date) } : {}),
         ...(status ? { status: status as any } : {}),
       },
@@ -84,6 +90,12 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
   try {
     if (!req.file) return res.status(400).json({ error: "請上傳派遣單 CSV 檔案" });
 
+    // carrier 決定這批要進「自家配送」還是某家貨運行的派遣單
+    const carrier = (req.body as { carrier?: string }).carrier?.trim() || "SELF";
+    if (!["SELF", ...CARRIERS].includes(carrier)) {
+      return res.status(400).json({ error: "配送方式不正確" });
+    }
+
     const rows = parseDispatchOrderCsv(req.file.buffer);
     const grouped = groupOrderRowsByCustomer(rows);
     const created: string[] = [];
@@ -103,9 +115,11 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
         errors.push(`${g.header.customerName}: 託運備註無法解析出任何品項（略過此筆）`);
         continue;
       }
-      const coords = await geocodeAddress(g.header.address);
+      // 交給貨運行的派遣單不需要座標（不做路線規劃、不導航），省下 geocode 呼叫
+      const coords = carrier === "SELF" ? await geocodeAddress(g.header.address) : null;
       const order = await prisma.dispatchOrder.create({
         data: {
+          carrier,
           deliveryDate,
           customerCode: g.header.customerCode,
           customerName: g.header.customerName,
@@ -120,8 +134,9 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
     }
 
     // 5.4：新增時除了通知所有物流主管，也直接廣播給所有送貨人員（此時尚未指派特定人員）
-    // 整批匯入只發一則通知，避免匯入多筆時洗版
-    if (created.length > 0) {
+    // 整批匯入只發一則通知，避免匯入多筆時洗版。
+    // 交給貨運行的派遣單不經送貨人員，不發這則通知。
+    if (created.length > 0 && carrier === "SELF") {
       await notifyOrderStakeholders(created[created.length - 1], `今天有 ${created.length} 筆新派遣單待確認`, null);
     }
 
@@ -142,8 +157,9 @@ ordersRouter.post("/select", requireRole("MANAGER"), async (req, res, next) => {
       destinationPoint: { lat: number; lng: number };
     };
 
+    // 只有自家配送的派遣單能指派給送貨人員；貨運行的單子走「貨運派遣」流程
     const orders = await prisma.dispatchOrder.findMany({
-      where: { id: { in: orderIds } },
+      where: { id: { in: orderIds }, carrier: "SELF" },
       include: { items: true },
     });
 
@@ -234,6 +250,7 @@ ordersRouter.delete("/:id", requireRole("ADMIN"), async (req, res, next) => {
 });
 
 /** 送貨人員只能動指派給自己的派遣單；物流主管與內勤不受限。
+ *  貨運行的派遣單由主管與倉管處理（沒有指派特定送貨人員）。
  *  沒有這層檢查的話，任何登入者都能把別人的派遣單標成已完成。 */
 type OrderAccess = { ok: true } | { ok: false; status: number; error: string };
 
@@ -243,6 +260,10 @@ async function assertCanModifyOrder(req: AuthedRequest, orderId: string): Promis
 
   const roles = req.staff?.roles ?? [];
   if (roles.includes("MANAGER") || roles.includes("ADMIN")) return { ok: true };
+  if (order.carrier !== "SELF") {
+    if (roles.includes("WAREHOUSE")) return { ok: true };
+    return { ok: false, status: 403, error: "沒有權限操作貨運派遣單" };
+  }
   if (order.assignedDriverId && order.assignedDriverId === req.staff?.id) return { ok: true };
   return { ok: false, status: 403, error: "只能操作指派給你的派遣單" };
 }

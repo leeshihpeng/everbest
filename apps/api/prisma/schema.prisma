@@ -50,6 +50,9 @@ model SystemSetting {
 
 model DispatchOrder {
   id               String              @id @default(cuid())
+  // 配送方式：SELF＝自家送貨人員（原有流程）；新竹貨運／大榮貨運＝交給貨運行。
+  // 兩者資料完全分開，查詢時務必帶上 carrier 條件，避免互相混入。
+  carrier          String              @default("SELF")
   deliveryDate     DateTime
   customerCode     String
   customerName     String
@@ -67,7 +70,7 @@ model DispatchOrder {
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
-  @@index([deliveryDate, status])
+  @@index([carrier, deliveryDate, status])
 }
 
 model DispatchOrderItem {

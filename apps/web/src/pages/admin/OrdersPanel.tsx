@@ -29,8 +29,10 @@ interface Order {
 
 // 同時用於內勤後台與物流主管頁面。匯入／補座標／刪除在後端都限 ADMIN，
 // 因此非 ADMIN（例如只有 MANAGER 的徐文卿）只看得到清單與狀態篩選。
-export default function OrdersPanel() {
+// carrier 省略＝自家配送；帶「新竹貨運」／「大榮貨運」則為交給貨運行的派遣單
+export default function OrdersPanel({ carrier }: { carrier?: string } = {}) {
   const isAdmin = !!getAuthedStaff()?.roles.includes("ADMIN");
+  const isSelf = !carrier || carrier === "SELF";
   const [orders, setOrders] = useState<Order[]>([]);
   const [status, setStatus] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -49,7 +51,7 @@ export default function OrdersPanel() {
     setLoading(true);
     setError(null);
     try {
-      setOrders(await api.getOrders(status ? { status } : {}));
+      setOrders(await api.getOrders({ ...(status ? { status } : {}), ...(carrier ? { carrier } : {}) }));
       setSelected(new Set());
     } catch (err) {
       setError((err as Error).message);
@@ -60,7 +62,7 @@ export default function OrdersPanel() {
 
   useEffect(() => {
     load();
-  }, [status]);
+  }, [status, carrier]);
 
   async function handleImport() {
     const file = fileRef.current?.files?.[0];
@@ -69,7 +71,7 @@ export default function OrdersPanel() {
     setImportResult(null);
     setError(null);
     try {
-      const result = await api.importOrders(file);
+      const result = await api.importOrders(file, carrier);
       setImportResult(result);
       if (fileRef.current) fileRef.current.value = "";
       await load();
@@ -193,7 +195,8 @@ export default function OrdersPanel() {
         />
       )}
 
-      {isAdmin && !loading && orders.some((o) => o.lat == null) && (
+      {/* 貨運行的派遣單不做路線規劃，不需要座標 */}
+      {isSelf && isAdmin && !loading && orders.some((o) => o.lat == null) && (
         <div className="flex justify-end mb-2">
           <button
             onClick={handleGeocodeMissing}
@@ -253,7 +256,7 @@ export default function OrdersPanel() {
                       {o.customerCode}
                     </span>
                     <span className="font-semibold text-[13px]">{o.customerName}</span>
-                    {o.lat == null && (
+                    {isSelf && o.lat == null && (
                       <span style={{ color: C.danger }} className="text-[10px]">
                         未定位
                       </span>

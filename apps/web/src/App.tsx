@@ -11,6 +11,7 @@ import Notifications from "./pages/Notifications";
 import InspectionReports from "./pages/InspectionReports";
 import ImportPermits from "./pages/ImportPermits";
 import ShipmentTracking from "./pages/ShipmentTracking";
+import CarrierDispatch from "./pages/logi/CarrierDispatch";
 import QuoteSheetPage from "./pages/QuoteSheetPage";
 import { getAuthedStaff, isLoggedIn, clearSession, isDriverOnly } from "./lib/auth";
 import { C } from "./components/common";
@@ -38,6 +39,8 @@ function MainDirectory() {
   const staff = getAuthedStaff();
   const canBizSystems = !!staff && (staff.roles.includes("SALES") || staff.roles.includes("MANAGER"));
   const isAdmin = !!staff?.roles.includes("ADMIN");
+  // 貨運派遣：主管與倉管使用
+  const canCarrierDispatch = !!staff && (staff.roles.includes("MANAGER") || staff.roles.includes("WAREHOUSE"));
 
   // 只送貨的人在主目錄沒有其他可選項目，直接帶到今日配送名單
   if (staff && isDriverOnly(staff.roles)) return <Navigate to="/logi/driver" replace />;
@@ -49,7 +52,9 @@ function MainDirectory() {
 
   const systems: { key: string; label: string; sub: string; icon: LucideIcon; to: string; color: string; soft: string; show: boolean }[] = [
     { key: "admin", label: "內勤後台", sub: "客戶／人員／派遣單管理", icon: Building2, to: "/admin", color: C.navy, soft: "#EDEFF2", show: isAdmin },
-    { key: "route", label: "路線排程系統", sub: "業務／物流／送貨／內勤管理", icon: Map, to: "/route", color: C.logiAccent, soft: C.logiAccentSoft, show: true },
+    // 路線排程系統裡的模組只對業務／物流主管／送貨人員開放，其他人進去會是空的，所以不顯示
+    { key: "route", label: "路線排程系統", sub: "業務／物流／送貨／內勤管理", icon: Map, to: "/route", color: C.logiAccent, soft: C.logiAccentSoft, show: !!staff && ["SALES", "MANAGER", "DRIVER"].some((r) => staff.roles.includes(r)) },
+    { key: "carrier", label: "貨運派遣", sub: "新竹貨運／大榮貨運出貨清點", icon: Truck, to: "/carrier", color: C.logiAccent, soft: C.logiAccentSoft, show: canCarrierDispatch },
     { key: "inspection", label: "檢驗報告", sub: "產品檢驗報告查詢與管理", icon: ClipboardCheck, to: "/inspection", color: C.bizAccent, soft: C.bizAccentSoft, show: canBizSystems },
     { key: "permit", label: "輸入許可證", sub: "進口許可證申請與追蹤", icon: FileText, to: "/permit", color: C.gold, soft: C.goldSoft, show: canBizSystems },
     { key: "tracking", label: "貨運追蹤", sub: "進出口貨運狀態追蹤", icon: PackageSearch, to: "/tracking", color: C.navy, soft: "#EDEFF2", show: canBizSystems },
@@ -260,6 +265,14 @@ export default function App() {
                 element={
                   <RequireRole role={["SALES", "MANAGER"]}>
                     <ShipmentTracking />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/carrier"
+                element={
+                  <RequireRole role={["MANAGER", "WAREHOUSE"]}>
+                    <CarrierDispatch />
                   </RequireRole>
                 }
               />

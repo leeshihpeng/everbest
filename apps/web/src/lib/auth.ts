@@ -25,8 +25,9 @@ export function isLoggedIn(): boolean {
   return !!localStorage.getItem("token");
 }
 
-// 除了送貨人員以外，會在主目錄／路線排程首頁產生入口的角色
-const HUB_ROLES = ["SALES", "MANAGER", "ADMIN", "MANAGER_VIEW", "DRIVER_VIEW"];
+// 除了送貨人員以外，會在主目錄產生入口的角色。
+// 兼任倉管的人在主目錄還有「貨運派遣」可用，因此不算「只送貨」。
+const HUB_ROLES = ["SALES", "MANAGER", "ADMIN", "MANAGER_VIEW", "DRIVER_VIEW", "WAREHOUSE"];
 
 /** 只有送貨任務的人（例如邱炫誠）沒有其他入口可選，登入後直接進今日配送名單，
  *  不必再點「路線排程系統 → 物流模式」兩層。 */

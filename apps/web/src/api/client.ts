@@ -138,7 +138,8 @@ export const api = {
     }),
   geocodeMissingCustomers: () =>
     request<{ total: number; updated: number; failed: number; errors: string[] }>("/customers/geocode-missing", { method: "POST" }),
-  getOrders: (params: { date?: string; status?: string }) => {
+  // carrier 省略＝自家配送（SELF）；帶「新竹貨運」／「大榮貨運」則取該貨運行的派遣單
+  getOrders: (params: { date?: string; status?: string; carrier?: string }) => {
     const qs = new URLSearchParams(params as Record<string, string>).toString();
     return request<any[]>(`/orders?${qs}`);
   },
@@ -174,9 +175,10 @@ export const api = {
   deleteOrder: (id: string) => request<void>(`/orders/${id}`, { method: "DELETE" }),
   geocodeMissingOrders: () =>
     request<{ total: number; updated: number; failed: number; errors: string[] }>("/orders/geocode-missing", { method: "POST" }),
-  importOrders: (file: File) => {
+  importOrders: (file: File, carrier?: string) => {
     const fd = new FormData();
     fd.append("file", file);
+    if (carrier) fd.append("carrier", carrier);
     return uploadFile<{ createdCount: number; orderIds: string[]; errors: string[]; detectedHeaders: string[] }>("/orders/import", fd);
   },
   getNotifications: () =>
