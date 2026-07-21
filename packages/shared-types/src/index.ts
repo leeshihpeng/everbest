@@ -1,7 +1,8 @@
 // 共用型別 — apps/api 與 apps/web 都會引用這份定義，避免前後端資料結構不一致
 
 // MANAGER_VIEW / DRIVER_VIEW：唯讀查看物流主管／送貨人員畫面，但不能勾選派遣單、指派、標記完成
-export type StaffRole = "SALES" | "MANAGER" | "MANAGER_VIEW" | "DRIVER" | "DRIVER_VIEW" | "ADMIN";
+// WAREHOUSE：倉管（角色細部權限待定，先能指派）
+export type StaffRole = "SALES" | "MANAGER" | "MANAGER_VIEW" | "DRIVER" | "DRIVER_VIEW" | "ADMIN" | "WAREHOUSE";
 export type OrderStatus = "PENDING" | "SELECTED" | "DISPATCHED" | "COMPLETED";
 
 export interface Customer {

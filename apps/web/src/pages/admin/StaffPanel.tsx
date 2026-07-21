@@ -3,8 +3,8 @@ import { api } from "../../api/client";
 import { C } from "../../components/common";
 import { TAIWAN_CITIES } from "../../lib/taiwanCities";
 
-const ROLE_LABELS: Record<string, string> = { SALES: "業務", MANAGER: "主管", DRIVER: "送貨" };
-const ALL_ROLES = ["SALES", "MANAGER", "DRIVER"];
+const ROLE_LABELS: Record<string, string> = { SALES: "業務", MANAGER: "主管", DRIVER: "送貨", WAREHOUSE: "倉管" };
+const ALL_ROLES = ["SALES", "MANAGER", "DRIVER", "WAREHOUSE"];
 
 interface Staff {
   id: string;

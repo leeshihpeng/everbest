@@ -37,6 +37,7 @@ function MainDirectory() {
   const navigate = useNavigate();
   const staff = getAuthedStaff();
   const canBizSystems = !!staff && (staff.roles.includes("SALES") || staff.roles.includes("MANAGER"));
+  const isAdmin = !!staff?.roles.includes("ADMIN");
 
   // 只送貨的人在主目錄沒有其他可選項目，直接帶到今日配送名單
   if (staff && isDriverOnly(staff.roles)) return <Navigate to="/logi/driver" replace />;
@@ -47,6 +48,7 @@ function MainDirectory() {
   }
 
   const systems: { key: string; label: string; sub: string; icon: LucideIcon; to: string; color: string; soft: string; show: boolean }[] = [
+    { key: "admin", label: "內勤後台", sub: "客戶／人員／派遣單管理", icon: Building2, to: "/admin", color: C.navy, soft: "#EDEFF2", show: isAdmin },
     { key: "route", label: "路線排程系統", sub: "業務／物流／送貨／內勤管理", icon: Map, to: "/route", color: C.logiAccent, soft: C.logiAccentSoft, show: true },
     { key: "inspection", label: "檢驗報告", sub: "產品檢驗報告查詢與管理", icon: ClipboardCheck, to: "/inspection", color: C.bizAccent, soft: C.bizAccentSoft, show: canBizSystems },
     { key: "permit", label: "輸入許可證", sub: "進口許可證申請與追蹤", icon: FileText, to: "/permit", color: C.gold, soft: C.goldSoft, show: canBizSystems },
@@ -199,23 +201,8 @@ function RouteSchedulerHome() {
             <ChevronRight size={18} color={C.muted} />
           </Link>
         )}
-        {staff?.roles.includes("ADMIN") && (
-          <Link to="/admin" className="w-full flex items-center gap-3 rounded-2xl p-4 shadow-sm" style={{ background: "#fff" }}>
-            <div className="rounded-xl flex items-center justify-center" style={{ width: 46, height: 46, background: "#EDEFF2" }}>
-              <Building2 size={22} color={C.navy} />
-            </div>
-            <div className="text-left flex-1">
-              <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[15px]">
-                內勤後台
-              </div>
-              <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
-                客戶／人員／派遣單管理
-              </div>
-            </div>
-            <ChevronRight size={18} color={C.muted} />
-          </Link>
-        )}
-        {staff && !["SALES", "MANAGER", "DRIVER", "ADMIN"].some((r) => staff.roles.includes(r)) && (
+        {/* 內勤後台已移到主目錄首位，這裡不再重複顯示 */}
+        {staff && !["SALES", "MANAGER", "DRIVER"].some((r) => staff.roles.includes(r)) && (
           <div style={{ color: C.muted }} className="text-center text-[13px] py-8">
             你的帳號目前沒有指派任何操作權限，請聯絡管理員。
           </div>
