@@ -63,6 +63,8 @@ model DispatchOrder {
   assignedDriverId String?
   assignedDriver   Staff?              @relation("AssignedDriver", fields: [assignedDriverId], references: [id])
   routeSequence    Int?
+  orderNo          String? // 出貨編號（新竹／大榮派遣單）
+  weight           Float? // 重量（新竹／大榮派遣單）
   lat              Float?
   lng              Float?
   items            DispatchOrderItem[]

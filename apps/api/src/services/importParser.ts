@@ -21,6 +21,8 @@ export interface ParsedOrderRow {
   phone?: string;
   items: { productName: string; quantity: number }[];
   totalQuantity?: number;
+  orderNo?: string; // 出貨編號（新竹／大榮的派遣單有）
+  weight?: number; // 重量（新竹／大榮的派遣單有）
 }
 
 const TRUE_VALUES = new Set(["是", "true", "TRUE", "1", "yes", "Y", "y", "V", "v"]);
@@ -37,7 +39,16 @@ const HEADER_ALIASES: Record<string, string[]> = {
   quantity: ["數量", "訂購數量", "數量(個)"],
   note: ["託運備註", "備註"],
   totalQuantity: ["訂貨數量之總計", "總數量", "總計數量", "數量總計"],
+  orderNo: ["出貨編號之第一筆", "出貨編號", "出貨單號", "單號"],
+  weight: ["重量", "總重量"],
 };
+
+/** 從出貨編號取出貨日期。新竹的派遣單沒有「出貨日期」欄，
+ *  但編號開頭就是日期（例如「2026/7/21M1065-0」→ 2026-07-21）。 */
+function dateFromOrderNo(orderNo: string): string {
+  const m = orderNo.match(/^\s*(20\d{2})\/(\d{1,2})\/(\d{1,2})/);
+  return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : "";
+}
 
 /** 解析「託運備註」欄位裡的品項字串，格式如「品名: 數量 ;品名2: 數量2 ;」，以 ; 分隔多筆品項 */
 function parseNoteItems(note: string): { productName: string; quantity: number }[] {
@@ -161,15 +172,22 @@ export function parseDispatchOrderCsv(buffer: Buffer): ParsedOrderRow[] {
         ? [{ productName: legacyProductName, quantity: Number(pickField(r, HEADER_ALIASES.quantity) || 0) }]
         : [];
       const customerName = pickField(r, HEADER_ALIASES.name);
+      const orderNo = pickField(r, HEADER_ALIASES.orderNo);
+      // 新竹的派遣單沒有「出貨日期」欄，改由出貨編號開頭取日期
+      const deliveryDate = normalizeDeliveryDate(pickField(r, HEADER_ALIASES.deliveryDate)) || dateFromOrderNo(orderNo);
+      const weight = pickField(r, HEADER_ALIASES.weight);
 
       return {
-        deliveryDate: normalizeDeliveryDate(pickField(r, HEADER_ALIASES.deliveryDate)),
-        customerCode: pickField(r, HEADER_ALIASES.code) || customerName,
+        deliveryDate,
+        // 有出貨編號時用它當客戶代號，同一天同客戶的不同單子才不會被併成一筆
+        customerCode: pickField(r, HEADER_ALIASES.code) || orderNo || customerName,
         customerName,
         address: pickField(r, HEADER_ALIASES.address),
         phone: pickField(r, HEADER_ALIASES.phone) || undefined,
         items,
         totalQuantity: pickField(r, HEADER_ALIASES.totalQuantity) ? Number(pickField(r, HEADER_ALIASES.totalQuantity)) : undefined,
+        orderNo: orderNo || undefined,
+        weight: weight ? Number(weight) : undefined,
       };
     })
     .filter((r) => r.customerName !== "");
@@ -192,6 +210,8 @@ export function groupOrderRowsByCustomer(rows: ParsedOrderRow[]) {
           customerName: row.customerName,
           address: row.address,
           phone: row.phone,
+          orderNo: row.orderNo,
+          weight: row.weight,
         },
         items: [],
       });

@@ -19,6 +19,8 @@ interface Order {
   customerName: string;
   address: string;
   phone?: string | null;
+  orderNo?: string | null;
+  weight?: number | null;
   status: string;
   items: OrderItem[];
 }
@@ -171,14 +173,21 @@ export default function CarrierDispatch() {
               const allChecked = o.items.length > 0 && o.items.every((i) => i.checked);
               return (
                 <div key={o.id} className="rounded-xl p-3 mb-2" style={{ background: "#fff", border: `1px solid ${C.hairline}` }}>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span style={{ fontFamily: "Manrope", color: C.muted }} className="text-[11px] font-bold">
-                      {o.customerCode}
-                    </span>
-                    <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[14px]">
+                  <div className="flex items-start justify-between gap-2">
+                    <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[14px] min-w-0">
                       {o.customerName}
                     </span>
+                    {o.weight != null && (
+                      <span style={{ fontFamily: "Manrope", color: C.muted }} className="text-[11px] font-bold shrink-0">
+                        {o.weight} 公斤
+                      </span>
+                    )}
                   </div>
+                  {o.orderNo && (
+                    <div style={{ fontFamily: "Manrope", color: C.bizAccent }} className="text-[11px] font-bold mt-0.5">
+                      {o.orderNo}
+                    </div>
+                  )}
                   <div style={{ color: C.muted }} className="text-[11px] mt-0.5 break-all">
                     {o.address}
                     {o.phone ? `　${o.phone}` : ""}
