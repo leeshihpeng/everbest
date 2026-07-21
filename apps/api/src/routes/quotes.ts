@@ -2,7 +2,6 @@ import { Router } from "express";
 import multer from "multer";
 import { PrismaClient } from "@prisma/client";
 import { requireAuth, requireRole, AuthedRequest } from "../middleware/auth";
-import { parseQuotePdf } from "../services/quoteParser";
 
 const prisma = new PrismaClient();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
@@ -13,22 +12,14 @@ const SHEET_ID = "singleton";
 
 quotesRouter.use(requireAuth);
 
-// 取得報價單內容（表格 + 檔案資訊）— 業務與主管皆可
+// 取得報價單檔案資訊（不含內容）— 業務與主管皆可
 quotesRouter.get("/", requireRole(["SALES", "MANAGER"]), async (_req, res, next) => {
   try {
     const sheet = await prisma.quoteSheet.findUnique({
       where: { id: SHEET_ID },
-      select: {
-        fileName: true,
-        mimeType: true,
-        sizeBytes: true,
-        uploadedAt: true,
-        uploadedBy: true,
-        items: { orderBy: { sortOrder: "asc" } },
-      },
+      select: { fileName: true, mimeType: true, sizeBytes: true, uploadedAt: true, uploadedBy: true },
     });
-    if (!sheet) return res.json(null);
-    res.json(sheet);
+    res.json(sheet ?? null);
   } catch (err) {
     next(err);
   }
@@ -56,26 +47,13 @@ quotesRouter.post("/", requireRole("ADMIN"), upload.single("file"), async (req: 
     if (!req.file) return res.status(400).json({ error: "請選擇要上傳的 PDF" });
     if (!/\.pdf$/i.test(req.file.originalname)) return res.status(400).json({ error: "僅支援 PDF 檔案" });
 
-    // 先解析成功才覆蓋，避免舊報價單被清掉卻換不到新的
-    let items;
-    try {
-      items = await parseQuotePdf(req.file.buffer);
-    } catch (e) {
-      return res.status(400).json({ error: `PDF 解析失敗（${(e as Error).message}），原報價單保持不變` });
-    }
-    if (items.length === 0) {
-      return res.status(400).json({ error: "讀不到任何產品資料，請確認是三順產品項目表；原報價單保持不變" });
-    }
+    const decoded = Buffer.from(req.file.originalname, "latin1").toString("utf8").replace(/\.pdf$/i, "");
+    const fileName = decoded.includes("�") ? req.file.originalname.replace(/\.pdf$/i, "") : decoded;
 
-    const fileName = Buffer.from(req.file.originalname, "latin1").toString("utf8").replace(/\.pdf$/i, "");
-    const safeName = fileName.includes("�") ? req.file.originalname.replace(/\.pdf$/i, "") : fileName;
-
-    // upsert + 重建品項＝整份覆蓋（QuoteItem 設了 onDelete: Cascade，先刪再建）
-    await prisma.quoteItem.deleteMany({ where: { sheetId: SHEET_ID } });
     await prisma.quoteSheet.upsert({
       where: { id: SHEET_ID },
       update: {
-        fileName: safeName,
+        fileName,
         mimeType: "application/pdf",
         sizeBytes: req.file.buffer.length,
         content: req.file.buffer,
@@ -84,16 +62,15 @@ quotesRouter.post("/", requireRole("ADMIN"), upload.single("file"), async (req: 
       },
       create: {
         id: SHEET_ID,
-        fileName: safeName,
+        fileName,
         mimeType: "application/pdf",
         sizeBytes: req.file.buffer.length,
         content: req.file.buffer,
         uploadedBy: req.staff?.name ?? null,
       },
     });
-    await prisma.quoteItem.createMany({ data: items.map((i) => ({ ...i, sheetId: SHEET_ID })) });
 
-    res.json({ itemCount: items.length, fileName: safeName });
+    res.json({ fileName });
   } catch (err) {
     next(err);
   }

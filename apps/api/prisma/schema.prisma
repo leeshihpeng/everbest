@@ -144,33 +144,15 @@ model Shipment {
   @@index([carrier, region])
 }
 
-// 產品報價單：永遠只保留一份，上傳新檔即整份覆蓋。
-// 同時保存原始 PDF（權威依據）與解析出的表格（供 App 內快速查詢）。
+// 產品報價單：永遠只保留一份原始 PDF，上傳新檔即覆蓋。
 model QuoteSheet {
-  id         String      @id @default("singleton")
+  id         String   @id @default("singleton")
   fileName   String
-  mimeType   String      @default("application/pdf")
+  mimeType   String   @default("application/pdf")
   sizeBytes  Int
   content    Bytes
-  uploadedAt DateTime    @default(now())
+  uploadedAt DateTime @default(now())
   uploadedBy String?
-  items      QuoteItem[]
-}
-
-model QuoteItem {
-  id          String     @id @default(cuid())
-  sheet       QuoteSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
-  sheetId     String
-  sortOrder   Int
-  code        String
-  productName String
-  brand       String
-  spec        String
-  price       String // 可能是區間或「缺貨」，保留原樣不轉數字
-  validDate   String
-  note        String
-
-  @@index([sheetId, sortOrder])
 }
 
 model Notification {
