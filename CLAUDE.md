@@ -28,6 +28,10 @@
 - 後端：https://everbest.onrender.com
 - Render 啟動時會跑 `prisma migrate deploy`，所以 **migration 檔一定要 commit**。
 - Render Start Command 指向巢狀路徑 `apps/api/dist/apps/api/src/index.js`（因 tsc rootDir 受 path-mapped shared-types 影響）。改建置設定時注意。
+  `apps/api` 的 `start` script 也指同一個路徑。**若哪天 api 不再 import shared-types，輸出會變回 `dist/src/`，兩邊都要改。**
+- `build` 會先 `rm -rf dist` 再 tsc：曾經發生 Render 顯示 deploy live、實際卻在跑舊的編譯結果
+  （2026-07-22，`/auth/change-password` 一直 404）。**部署後要驗證的是「新端點真的存在」，不是看 Render 的綠勾。**
+  快速驗法：`curl -X POST <api>/auth/login` 看回應欄位有沒有新版才有的欄位。
 - Render 免費方案會休眠，閒置後第一次請求可能要等 30–60 秒才醒來（不是壞掉）。
 - 使用者回報「按了沒反應／404」時，先確認是否部署還沒跑完或 PWA 快取舊版，再懷疑程式。
 
