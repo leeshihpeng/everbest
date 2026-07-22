@@ -159,6 +159,16 @@ ordersRouter.post("/select", requireRole("MANAGER"), async (req, res, next) => {
       destinationPoint: { lat: number; lng: number };
     };
 
+    if (!Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ error: "請至少勾選一筆派遣單" });
+    }
+    // 指派對象一定要是真的送貨人員，否則派遣單會被指派到不存在／非司機的帳號上而卡死，
+    // 那個人也永遠看不到、無法配送。
+    const driver = typeof driverId === "string" ? await prisma.staff.findUnique({ where: { id: driverId } }) : null;
+    if (!driver || !rolesToArray(driver.roles).includes("DRIVER")) {
+      return res.status(400).json({ error: "請指定有效的送貨人員" });
+    }
+
     // 只有自家配送的派遣單能指派給送貨人員；貨運行的單子走「貨運派遣」流程
     const orders = await prisma.dispatchOrder.findMany({
       where: { id: { in: orderIds }, carrier: "SELF" },
@@ -204,8 +214,8 @@ ordersRouter.post("/select", requireRole("MANAGER"), async (req, res, next) => {
     }
 
     // 通知對應送貨人員（含沒有座標、未排進路線的派遣單）——這次指派只發一則通知，不逐筆洗版
-    const driver = await prisma.staff.findUnique({ where: { id: driverId } });
-    if (driver) {
+    // driver 已在前面驗證存在，直接沿用
+    {
       const allAssignedIds = [...routeResult.orderedStopRefIds, ...unroutedOrders.map((o) => o.id)];
       if (allAssignedIds.length > 0) {
         await prisma.notification.create({

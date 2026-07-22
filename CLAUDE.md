@@ -117,6 +117,9 @@
   - 有出貨編號時用它當 `customerCode`，避免同日同客戶的不同單被合併成一筆。
 - 主目錄項目順序：內勤後台(ADMIN) → 路線排程系統(全部) → 檢驗報告／輸入許可證／貨運追蹤／產品報價單(SALES 或 MANAGER)。內勤後台**只在主目錄**，不再放路線排程首頁。
 - 權限要**前後端都擋**：後端 `requireRole`（可傳陣列，符合其一即可），前端隱藏按鈕。
+- `POST /orders/select` 的 `driverId` 一定要驗證「存在且真的有 `DRIVER` 角色」——
+  `DRIVER_VIEW`（唯讀）不算，指派到不存在／非司機的帳號會讓派遣單卡死沒人看得到。
+  查角色用 `rolesToArray().includes("DRIVER")`，**不要用字串 `contains "DRIVER"`**（會誤中 `DRIVER_VIEW`）。
 - 派遣單清單依縣市分區，順序是使用者指定的**送貨慣用順序**
   `台北市→新北市→基隆市→桃園市→其他`（見 `lib/taiwanCities.ts` 的 `DISPATCH_CITIES`），
   **不是**由北到南的 `TAIWAN_CITIES`，兩者不要互相取代。

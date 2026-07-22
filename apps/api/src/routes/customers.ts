@@ -24,7 +24,15 @@ customersRouter.get("/", async (_req, res, next) => {
 // 順帶消耗 Google 定位額度。
 customersRouter.post("/", requireRole(["SALES", "MANAGER", "ADMIN"]), async (req, res, next) => {
   try {
-    const { code, name, address, phone, isPriority } = req.body;
+    const { code, name, address, phone, isPriority } = req.body ?? {};
+    // 必填欄位缺漏或型別不對時，回明確的 400，而不是讓 Prisma 拋錯變成 500。
+    // 也擋掉物件注入（例如 code 傳成 {$ne:null}）——本系統欄位一律是字串。
+    if (typeof code !== "string" || !code.trim() || typeof name !== "string" || !name.trim() || typeof address !== "string" || !address.trim()) {
+      return res.status(400).json({ error: "請提供客戶編號、名稱與地址（皆為文字）" });
+    }
+    if (phone != null && typeof phone !== "string") {
+      return res.status(400).json({ error: "電話格式不正確" });
+    }
     const coords = await geocodeAddress(address);
     const customer = await prisma.customer.create({
       data: {
