@@ -178,6 +178,24 @@ export function ProductSummary({
   );
 }
 
+/** 單張派遣單的貨品數量小計。清單上每個客戶都要能一眼看出「這家總共幾件」，
+ *  不必自己把各品項加起來。跟 ProductSummary 的「全部貨品總計」是不同層級：
+ *  這裡只算單一客戶。 */
+export function QtySubtotal({ total, accent }: { total: number; accent: string }) {
+  return (
+    <span
+      style={{ background: accent, color: "#fff", fontFamily: "Manrope" }}
+      className="text-[11px] font-bold px-1.5 py-0.5 rounded shrink-0"
+    >
+      小計 {total}
+    </span>
+  );
+}
+
+export function sumQty(items: { quantity: number }[]): number {
+  return items.reduce((sum, i) => sum + (i.quantity || 0), 0);
+}
+
 export interface TimelineProduct {
   name: string;
   qty: number;
@@ -287,6 +305,7 @@ export function RouteTimeline({
                           </span>
                         )
                       )}
+                      <QtySubtotal total={n.data.products.reduce((s, p) => s + (p.qty || 0), 0)} accent={accent} />
                     </div>
                   )}
                   <div style={{ fontFamily: "Manrope", color: accent }} className="text-[11px] font-bold mt-1">

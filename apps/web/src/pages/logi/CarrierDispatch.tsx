@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, Truck, Check } from "lucide-react";
 import { api } from "../../api/client";
-import { C, TopBar, ProductSummary } from "../../components/common";
+import { C, TopBar, ProductSummary, QtySubtotal, sumQty } from "../../components/common";
 
 const CARRIERS = ["新竹貨運", "大榮貨運"];
 
@@ -208,6 +208,7 @@ export default function CarrierDispatch() {
                         </span>
                       </button>
                     ))}
+                    {o.items.length > 0 && <QtySubtotal total={sumQty(o.items)} accent={C.logiAccent} />}
                   </div>
 
                   <div className="flex justify-end mt-2">

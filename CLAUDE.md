@@ -93,6 +93,9 @@
   **不是**由北到南的 `TAIWAN_CITIES`，兩者不要互相取代。
   - 派遣單勾選（`ManagerSelect`）：每區可整區勾選。
   - 派遣單管理（`OrdersPanel`）：**只有自家配送分區**；貨運行的單子送全台各地，分區沒意義，維持單一清單。
+- 只要畫面上列出貨品數量，該客戶那列尾端就要有 `QtySubtotal`（單張派遣單的數量小計）。
+  跟 `ProductSummary` 的「全部貨品總計」不同層級：小計＝這一家，總計＝這批全部。
+  目前四處：`OrdersPanel`、`ManagerSelect`、`CarrierDispatch`、`RouteTimeline`（送貨人員路線）。
 
 ## 其他
 

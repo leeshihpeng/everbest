@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 import { api } from "../../../api/client";
 import OrdersPanel from "../../admin/OrdersPanel";
-import { C, TopBar, Checkbox, RouteTimeline, TimelineRoute, ProductSummary } from "../../../components/common";
+import { C, TopBar, Checkbox, RouteTimeline, TimelineRoute, ProductSummary, QtySubtotal } from "../../../components/common";
 import { dispatchCityOf, dispatchCityIndex } from "../../../lib/taiwanCities";
 
 interface OrderItem {
@@ -305,6 +305,7 @@ export default function ManagerSelect() {
                               {p.productName} ×{p.quantity}
                             </span>
                           ))}
+                          {o.items.length > 0 && <QtySubtotal total={o.items.reduce((s, p) => s + p.quantity, 0)} accent={C.logiAccent} />}
                         </div>
                         {isSel && (
                           <button onClick={() => togglePriority(o.id)} className="mt-2 flex items-center gap-1">

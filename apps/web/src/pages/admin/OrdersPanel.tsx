@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { getAuthedStaff } from "../../lib/auth";
 import { dispatchCityOf, dispatchCityIndex } from "../../lib/taiwanCities";
-import { C, Checkbox, ProductSummary } from "../../components/common";
+import { C, Checkbox, ProductSummary, QtySubtotal, sumQty } from "../../components/common";
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "待處理",
@@ -306,6 +306,7 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
                       {it.productName} ×{it.quantity}
                     </span>
                   ))}
+                  {o.items.length > 0 && <QtySubtotal total={sumQty(o.items)} accent={C.navy} />}
                   {isAdmin && (
                     <button
                       onClick={() => handleDelete(o.id)}
