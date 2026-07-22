@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { getAuthedStaff } from "../../lib/auth";
+import { dispatchCityOf, dispatchCityIndex } from "../../lib/taiwanCities";
 import { C, Checkbox, ProductSummary } from "../../components/common";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -111,6 +112,19 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
       setDeletingId(null);
     }
   }
+
+  // 自家配送的清單依縣市分開（順序同派遣單勾選：台北→新北→基隆→桃園→其他），
+  // 貨運行的單子送到全台各地，分區沒有意義，維持單一清單。
+  const cityGroups = useMemo(() => {
+    if (!isSelf) return [["", orders] as [string, Order[]]];
+    const map = new Map<string, Order[]>();
+    for (const o of orders) {
+      const city = dispatchCityOf(o.address);
+      if (!map.has(city)) map.set(city, []);
+      map.get(city)!.push(o);
+    }
+    return [...map.entries()].sort(([a], [b]) => dispatchCityIndex(a) - dispatchCityIndex(b));
+  }, [orders, isSelf]);
 
   const allSelected = orders.length > 0 && selected.size === orders.length;
   function toggleSelectAll() {
@@ -241,9 +255,25 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
 
       {loading ? (
         <div className="text-center text-[13px] py-6" style={{ color: C.muted }}>載入中…</div>
+      ) : orders.length === 0 ? (
+        <div className="rounded-xl text-center text-[13px] py-6" style={{ border: `1px solid ${C.hairline}`, background: "#fff", color: C.muted }}>
+          沒有符合條件的派遣單
+        </div>
       ) : (
+        cityGroups.map(([city, group]) => (
+        <div key={city} className="mb-3 last:mb-0">
+          {city && (
+            <div className="flex items-center justify-between px-3 py-1.5 rounded-lg mb-1.5" style={{ background: C.bg }}>
+              <span style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.navy }} className="text-[12px] font-bold">
+                {city}
+              </span>
+              <span style={{ fontFamily: "Manrope", color: C.muted }} className="text-[11px] font-bold">
+                {group.length} 筆
+              </span>
+            </div>
+          )}
         <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.hairline}`, background: "#fff" }}>
-          {orders.map((o) => (
+          {group.map((o) => (
             <div key={o.id} className="px-3 py-2 border-t first:border-t-0 flex items-start gap-2" style={{ borderColor: C.hairline }}>
               {isAdmin && (
                 <button onClick={() => toggleSelectOne(o.id)} className="mt-0.5 shrink-0">
@@ -290,12 +320,9 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
               </div>
             </div>
           ))}
-          {orders.length === 0 && (
-            <div className="text-center text-[13px] py-6" style={{ color: C.muted }}>
-              沒有符合條件的派遣單
-            </div>
-          )}
         </div>
+        </div>
+        ))
       )}
     </div>
   );
