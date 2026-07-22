@@ -170,7 +170,6 @@ export default function CarrierDispatch() {
               accent={C.logiAccent}
             />
             {orders.map((o) => {
-              const allChecked = o.items.length > 0 && o.items.every((i) => i.checked);
               return (
                 <div key={o.id} className="rounded-xl p-3 mb-2" style={{ background: "#fff", border: `1px solid ${C.hairline}` }}>
                   <div className="flex items-start justify-between gap-2">
@@ -212,14 +211,12 @@ export default function CarrierDispatch() {
                   </div>
 
                   <div className="flex justify-end mt-2">
+                    {/* 這是「交貨」動作鈕，樣式固定；若跟著檢貨狀態變色，
+                        會讓人誤以為已經交給貨運行了 */}
                     <button
                       onClick={() => markCompleted(o)}
                       disabled={busyId === o.id}
-                      style={
-                        allChecked
-                          ? { background: C.logiAccent, color: "#fff" }
-                          : { border: `1px solid ${C.hairline}`, color: C.muted }
-                      }
+                      style={{ border: `1px solid ${C.logiAccent}`, color: C.logiAccent }}
                       className="flex items-center gap-1 text-[12px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-60"
                     >
                       <Check size={14} /> {busyId === o.id ? "處理中…" : "已交貨運行"}
