@@ -78,6 +78,8 @@
   - **查詢一定要帶 carrier 條件**。`GET /orders` 未指定時預設只回 `SELF`，避免貨運單混進
     物流主管勾選與送貨人員今日名單。`POST /orders/select` 也只吃 `SELF`（貨運單不可指派給司機）。
   - 內勤後台「派遣單／新竹派遣單／大榮派遣單」共用 `OrdersPanel`（傳 `carrier` prop）。
+    物流主管的「派遣單管理」也是同一個元件，但傳 `allowImport={false}`——
+    **匯入 CSV 只在內勤後台**，物流主管不匯入派遣單（即使本人兼 ADMIN 也不顯示）。
   - 貨運派遣頁 `pages/logi/CarrierDispatch.tsx`：貨品總計＋逐項檢貨＋「已交貨運行」，刻意不做導航。
   - **三家 CSV 欄位不同**（`importParser.ts` 以別名容錯處理）：
     自家有「出貨日期」；大榮有「出貨日期＋出貨編號之第一筆＋重量」；

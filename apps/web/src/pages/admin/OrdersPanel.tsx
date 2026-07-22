@@ -30,7 +30,8 @@ interface Order {
 // 同時用於內勤後台與物流主管頁面。匯入／補座標／刪除在後端都限 ADMIN，
 // 因此非 ADMIN（例如只有 MANAGER 的徐文卿）只看得到清單與狀態篩選。
 // carrier 省略＝自家配送；帶「新竹貨運」／「大榮貨運」則為交給貨運行的派遣單
-export default function OrdersPanel({ carrier }: { carrier?: string } = {}) {
+// allowImport=false：物流主管頁面用。匯入派遣單是內勤的事，即使本人兼 ADMIN 也不該從這裡匯入
+export default function OrdersPanel({ carrier, allowImport = true }: { carrier?: string; allowImport?: boolean } = {}) {
   const isAdmin = !!getAuthedStaff()?.roles.includes("ADMIN");
   const isSelf = !carrier || carrier === "SELF";
   const [orders, setOrders] = useState<Order[]>([]);
@@ -137,7 +138,7 @@ export default function OrdersPanel({ carrier }: { carrier?: string } = {}) {
 
   return (
     <div className="p-4">
-      {isAdmin && (
+      {isAdmin && allowImport && (
       <div className="rounded-xl p-3 mb-4" style={{ background: "#fff", border: `1px solid ${C.hairline}` }}>
         <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[13px] mb-2">
           CSV 匯入派遣單（欄位：出貨日期,公司名稱,倉庫住址1,公司電話1,託運備註,訂貨數量之總計）

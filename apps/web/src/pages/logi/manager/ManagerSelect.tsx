@@ -205,13 +205,14 @@ export default function ManagerSelect() {
     </div>
   );
 
-  // 派遣單管理：沿用內勤後台的清單（含各狀態分頁）；匯入／刪除等僅 ADMIN 可見
+  // 派遣單管理：沿用內勤後台的清單（含各狀態分頁）。
+  // 匯入 CSV 是內勤的職責，物流主管這邊不提供（allowImport={false}）。
   if (tab === "manage") {
     return (
       <div>
         <TopBar title="派遣單管理（物流主管）" accent={C.logiAccent} onBack={() => navigate("/route")} />
         {tabBar}
-        <OrdersPanel />
+        <OrdersPanel allowImport={false} />
       </div>
     );
   }
