@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { C } from "../../components/common";
 import { TAIWAN_CITIES } from "../../lib/taiwanCities";
+import { PASSWORD_RULE_TEXT, validatePassword } from "../../lib/password";
 
 const ROLE_LABELS: Record<string, string> = { SALES: "業務", MANAGER: "主管", DRIVER: "送貨", WAREHOUSE: "倉管" };
 const ALL_ROLES = ["SALES", "MANAGER", "DRIVER", "WAREHOUSE"];
@@ -26,6 +27,8 @@ export default function StaffPanel() {
   const [roles, setRoles] = useState<Set<string>>(new Set());
   const [formRegions, setFormRegions] = useState<Set<string>>(new Set());
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
+  const [resetInfo, setResetInfo] = useState<{ name: string; tempPassword: string } | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editRegions, setEditRegions] = useState<Set<string>>(new Set());
@@ -94,6 +97,11 @@ export default function StaffPanel() {
       setError("物流主管與送貨人員為互斥角色，不可同時指派");
       return;
     }
+    const invalidPassword = validatePassword(form.password);
+    if (invalidPassword) {
+      setError(invalidPassword);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -124,6 +132,23 @@ export default function StaffPanel() {
     }
   }
 
+  // 忘記密碼的處理：重設成一組臨時密碼，當面／電話告訴本人，他登入後系統會要求他自己設一組新的。
+  // 臨時密碼只有這一次看得到（資料庫存的是雜湊值），所以要留在畫面上讓主管抄下來。
+  async function handleResetPassword(s: Staff) {
+    if (!confirm(`確定要重設「${s.name}」的密碼嗎？他原本的密碼會立刻失效。`)) return;
+    setResettingId(s.id);
+    setError(null);
+    setResetInfo(null);
+    try {
+      const { tempPassword } = await api.resetStaffPassword(s.id);
+      setResetInfo({ name: s.name, tempPassword });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setResettingId(null);
+    }
+  }
+
   async function handleDelete(id: string) {
     if (!confirm("確定要刪除這位人員嗎？該人員指派的派遣單會改回未指派。")) return;
     setDeletingId(id);
@@ -146,7 +171,10 @@ export default function StaffPanel() {
         </div>
         <input required placeholder="姓名" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full mb-2 px-2 py-1.5 rounded text-[12px]" style={{ border: `1px solid ${C.hairline}` }} />
         <input required placeholder="住家地址" value={form.homeAddress} onChange={(e) => setForm({ ...form, homeAddress: e.target.value })} className="w-full mb-2 px-2 py-1.5 rounded text-[12px]" style={{ border: `1px solid ${C.hairline}` }} />
-        <input required type="password" placeholder="登入密碼" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-full mb-2 px-2 py-1.5 rounded text-[12px]" style={{ border: `1px solid ${C.hairline}` }} />
+        <input required type="password" placeholder="登入密碼" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-full mb-1 px-2 py-1.5 rounded text-[12px]" style={{ border: `1px solid ${C.hairline}` }} />
+        <div style={{ color: form.password && validatePassword(form.password) ? C.danger : C.muted }} className="text-[11px] mb-2">
+          {PASSWORD_RULE_TEXT}
+        </div>
         <input placeholder="LINE 群組 ID（選填）" value={form.lineGroupId} onChange={(e) => setForm({ ...form, lineGroupId: e.target.value })} className="w-full mb-2 px-2 py-1.5 rounded text-[12px]" style={{ border: `1px solid ${C.hairline}` }} />
         <div className="flex gap-3 mb-2">
           {ALL_ROLES.map((r) => (
@@ -190,6 +218,24 @@ export default function StaffPanel() {
       </form>
 
       {error && <div className="text-[12px] mb-2" style={{ color: C.danger }}>{error}</div>}
+
+      {resetInfo && (
+        <div className="rounded-xl p-3 mb-3" style={{ background: C.goldSoft, border: `1px solid ${C.gold}` }}>
+          <div style={{ color: C.gold, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[12px] font-bold">
+            {resetInfo.name} 的臨時密碼
+          </div>
+          <div style={{ fontFamily: "Manrope", color: C.navy }} className="text-[26px] font-black tracking-widest my-1">
+            {resetInfo.tempPassword}
+          </div>
+          <div style={{ color: C.gold }} className="text-[11px] leading-relaxed">
+            請當面或用電話告訴本人。這組密碼<b>只會顯示這一次</b>，關掉就查不到了。
+            本人用它登入後，系統會要求他立刻設定自己的新密碼。
+          </div>
+          <button onClick={() => setResetInfo(null)} style={{ color: C.gold }} className="text-[11px] font-bold mt-2 underline">
+            我抄好了，關閉
+          </button>
+        </div>
+      )}
 
       {!loading && staff.some((s) => s.homeLat == null) && (
         <div className="flex justify-end mb-2">
@@ -254,6 +300,14 @@ export default function StaffPanel() {
                       {editingId === s.id ? "取消" : "編輯範圍"}
                     </button>
                   )}
+                  <button
+                    onClick={() => handleResetPassword(s)}
+                    disabled={resettingId === s.id}
+                    style={{ color: C.gold }}
+                    className="text-[11px] font-bold px-2 py-1 disabled:opacity-60"
+                  >
+                    {resettingId === s.id ? "重設中…" : "重設密碼"}
+                  </button>
                   <button
                     onClick={() => handleDelete(s.id)}
                     disabled={deletingId === s.id}

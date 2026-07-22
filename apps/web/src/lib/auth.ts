@@ -2,6 +2,8 @@ export interface AuthedStaff {
   id: string;
   name: string;
   roles: string[];
+  /** 主管重設過密碼：進系統前必須先設定自己的新密碼 */
+  mustChangePassword?: boolean;
 }
 
 const STAFF_KEY = "staff";
@@ -14,6 +16,13 @@ export function getAuthedStaff(): AuthedStaff | null {
 export function setSession(token: string, staff: AuthedStaff) {
   localStorage.setItem("token", token);
   localStorage.setItem(STAFF_KEY, JSON.stringify(staff));
+}
+
+/** 設定完新密碼後清掉旗標，否則 RequireAuth 會一直把人擋回設定畫面 */
+export function clearMustChangePassword() {
+  const staff = getAuthedStaff();
+  if (!staff) return;
+  localStorage.setItem(STAFF_KEY, JSON.stringify({ ...staff, mustChangePassword: false }));
 }
 
 export function clearSession() {

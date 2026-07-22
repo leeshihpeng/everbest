@@ -106,10 +106,13 @@ export interface QuoteSheet {
 
 export const api = {
   login: (name: string, password: string) =>
-    request<{ token: string; staff: { id: string; name: string; roles: string[] } }>("/auth/login", {
+    request<{ token: string; staff: { id: string; name: string; roles: string[]; mustChangePassword?: boolean } }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ name, password }),
     }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: true }>("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
+  resetStaffPassword: (id: string) => request<{ tempPassword: string }>(`/staff/${id}/reset-password`, { method: "POST" }),
   getCustomers: () => request<any[]>("/customers"),
   createCustomer: (data: unknown) =>
     request<{ id: string; code: string; name: string; address: string; city: string; isPriority: boolean; lat?: number; lng?: number }>("/customers", {

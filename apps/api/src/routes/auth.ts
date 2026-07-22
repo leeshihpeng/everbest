@@ -1,8 +1,9 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
-import { signStaffToken } from "../middleware/auth";
+import { signStaffToken, requireAuth, AuthedRequest } from "../middleware/auth";
 import { rolesToArray } from "../utils/roles";
+import { validatePassword } from "../utils/password";
 
 const prisma = new PrismaClient();
 export const authRouter = Router();
@@ -73,7 +74,31 @@ authRouter.post("/login", async (req, res, next) => {
 
     const roles = rolesToArray(staff.roles);
     const token = signStaffToken({ id: staff.id, name: staff.name, roles });
-    res.json({ token, staff: { id: staff.id, name: staff.name, roles } });
+    // mustChangePassword＝主管重設過密碼，前端要擋在「設定新密碼」畫面，不讓他直接進系統
+    res.json({ token, staff: { id: staff.id, name: staff.name, roles, mustChangePassword: staff.mustChangePassword } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 本人修改自己的密碼。一定要驗舊密碼，否則撿到別人未登出的手機就能改掉密碼把人鎖在外面。
+authRouter.post("/change-password", requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body as { currentPassword?: string; newPassword?: string };
+    const invalid = validatePassword(newPassword);
+    if (invalid) return res.status(400).json({ error: invalid });
+
+    const staff = await prisma.staff.findUnique({ where: { id: req.staff!.id } });
+    if (!staff?.passwordHash) return res.status(400).json({ error: "此帳號尚未設定密碼" });
+
+    const valid = await bcrypt.compare(currentPassword ?? "", staff.passwordHash);
+    if (!valid) return res.status(401).json({ error: "目前密碼不正確" });
+
+    await prisma.staff.update({
+      where: { id: staff.id },
+      data: { passwordHash: await bcrypt.hash(newPassword!, 10), mustChangePassword: false },
+    });
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

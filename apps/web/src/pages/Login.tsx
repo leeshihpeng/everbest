@@ -18,7 +18,8 @@ export default function Login() {
     try {
       const { token, staff } = await api.login(name, password);
       setSession(token, staff);
-      navigate(landingPath(staff.roles));
+      // 主管重設過密碼的人，先去設定自己的新密碼，設定完才進系統
+      navigate(staff.mustChangePassword ? "/password" : landingPath(staff.roles));
     } catch (err) {
       setError((err as Error).message);
     } finally {

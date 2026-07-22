@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Check, LogOut } from "lucide-react";
+import { Bell, Check, LogOut, KeyRound } from "lucide-react";
 import { api } from "../../../api/client";
 import { getAuthedStaff, isDriverOnly, clearSession } from "../../../lib/auth";
 import { C, TopBar, Pill, RouteTimeline, ActionRow, TimelineRoute, ProductSummary } from "../../../components/common";
@@ -218,16 +218,22 @@ export default function DriverRoute() {
                 </span>
               )}
             </button>
+            {/* 只送貨的人看不到主目錄，改密碼的入口只能放這裡 */}
             {driverOnly && (
-              <button
-                onClick={() => {
-                  clearSession();
-                  navigate("/login");
-                }}
-                className="flex items-center gap-1 p-1 text-white/90 text-[12px] font-bold"
-              >
-                <LogOut size={14} /> 登出
-              </button>
+              <>
+                <button onClick={() => navigate("/password")} className="p-1 text-white/90">
+                  <KeyRound size={16} />
+                </button>
+                <button
+                  onClick={() => {
+                    clearSession();
+                    navigate("/login");
+                  }}
+                  className="flex items-center gap-1 p-1 text-white/90 text-[12px] font-bold"
+                >
+                  <LogOut size={14} /> 登出
+                </button>
+              </>
             )}
           </div>
         }

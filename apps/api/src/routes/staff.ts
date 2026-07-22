@@ -5,6 +5,7 @@ import { requireAuth, requireRole, AuthedRequest } from "../middleware/auth";
 import { StaffRole, validateStaffRoles } from "@route-scheduler/shared-types";
 import { geocodeAddress } from "../services/googleMaps";
 import { rolesToArray, rolesToString } from "../utils/roles";
+import { validatePassword, generateTempPassword } from "../utils/password";
 
 const prisma = new PrismaClient();
 export const staffRouter = Router();
@@ -49,6 +50,9 @@ staffRouter.post("/", requireRole("ADMIN"), async (req, res, next) => {
     if (!validateStaffRoles(roles as any)) {
       return res.status(400).json({ error: "物流主管與送貨人員為互斥角色，不可同時指派" });
     }
+
+    const invalid = validatePassword(password);
+    if (invalid) return res.status(400).json({ error: invalid });
 
     const coords = await geocodeAddress(homeAddress);
     const passwordHash = await bcrypt.hash(password, 10);
@@ -106,6 +110,25 @@ staffRouter.delete("/:id", requireRole("ADMIN"), async (req, res, next) => {
     await prisma.dispatchOrder.updateMany({ where: { assignedDriverId: req.params.id }, data: { assignedDriverId: null } });
     await prisma.staff.delete({ where: { id: req.params.id } });
     res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 忘記密碼：主管重設成一組一次性臨時密碼，當面／電話告知本人，本人登入後會被強制設定新密碼。
+// 刻意**不做**「清空密碼讓本人自己設定」——那段空窗期任何知道姓名的人都能搶先接管帳號。
+staffRouter.post("/:id/reset-password", requireRole("ADMIN"), async (req, res, next) => {
+  try {
+    const target = await prisma.staff.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ error: "找不到人員" });
+
+    const tempPassword = generateTempPassword();
+    await prisma.staff.update({
+      where: { id: target.id },
+      data: { passwordHash: await bcrypt.hash(tempPassword, 10), mustChangePassword: true },
+    });
+    // 臨時密碼只在這個回應出現一次，資料庫存的是雜湊值，之後沒有任何地方查得到
+    res.json({ tempPassword });
   } catch (err) {
     next(err);
   }

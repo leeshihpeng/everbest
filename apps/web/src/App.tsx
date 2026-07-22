@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate } from "react-router-dom";
-import { ChevronRight, Truck, User, Building2, LogOut, Bell, ArrowLeft, Map, ClipboardCheck, FileText, PackageSearch, Tags } from "lucide-react";
+import { ChevronRight, Truck, User, Building2, LogOut, Bell, ArrowLeft, Map, ClipboardCheck, FileText, PackageSearch, Tags, KeyRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import BizSetup from "./pages/biz/BizSetup";
 import ManagerSelect from "./pages/logi/manager/ManagerSelect";
@@ -13,12 +13,15 @@ import ImportPermits from "./pages/ImportPermits";
 import ShipmentTracking from "./pages/ShipmentTracking";
 import CarrierDispatch from "./pages/logi/CarrierDispatch";
 import QuoteSheetPage from "./pages/QuoteSheetPage";
+import ChangePassword from "./pages/ChangePassword";
 import { getAuthedStaff, isLoggedIn, clearSession, isDriverOnly } from "./lib/auth";
 import { C } from "./components/common";
 import { api } from "./api/client";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   if (!isLoggedIn()) return <Navigate to="/login" replace />;
+  // 密碼被主管重設過的人，任何頁面都先導到設定新密碼，避免用臨時密碼繼續操作
+  if (getAuthedStaff()?.mustChangePassword) return <Navigate to="/password" replace />;
   return children;
 }
 
@@ -26,10 +29,17 @@ function RequireAuth({ children }: { children: JSX.Element }) {
 // 沒有權限就導回主目錄。
 function RequireRole({ role, children }: { role: string | string[]; children: JSX.Element }) {
   if (!isLoggedIn()) return <Navigate to="/login" replace />;
+  if (getAuthedStaff()?.mustChangePassword) return <Navigate to="/password" replace />;
   const staff = getAuthedStaff();
   const allowed = Array.isArray(role) ? role : [role];
   if (!staff || !allowed.some((r) => staff.roles.includes(r))) return <Navigate to="/" replace />;
   return children;
+}
+
+// 修改密碼：被主管重設過密碼的人是「強制」進來的（不給返回鍵），其他人是自己點進來改的
+function ChangePasswordRoute() {
+  if (!isLoggedIn()) return <Navigate to="/login" replace />;
+  return <ChangePassword forced={!!getAuthedStaff()?.mustChangePassword} />;
 }
 
 // 三順主目錄 — 各應用系統的入口。路線排程系統所有登入者皆可進入（內部再依角色顯示模組）；
@@ -73,9 +83,14 @@ function MainDirectory() {
         <div style={{ color: "#B7C2D6" }} className="text-[12px] mt-1 flex items-center justify-between">
           <span>{staff ? `你好，${staff.name}` : ""}</span>
           {staff && (
-            <button onClick={handleLogout} className="flex items-center gap-1 text-white/80">
-              <LogOut size={12} /> 登出
-            </button>
+            <div className="flex items-center gap-3">
+              <Link to="/password" className="flex items-center gap-1 text-white/80">
+                <KeyRound size={12} /> 修改密碼
+              </Link>
+              <button onClick={handleLogout} className="flex items-center gap-1 text-white/80">
+                <LogOut size={12} /> 登出
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -228,6 +243,8 @@ export default function App() {
           <div style={{ minHeight: 780 }} className="relative">
             <Routes>
               <Route path="/login" element={<Login />} />
+              {/* 不能包 RequireAuth，否則被重設密碼的人會在這裡無限轉圈 */}
+              <Route path="/password" element={<ChangePasswordRoute />} />
               <Route
                 path="/"
                 element={
