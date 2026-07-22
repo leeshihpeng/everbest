@@ -48,7 +48,21 @@ app.use((_req, res, next) => {
 // 限制 JSON 大小，避免超大請求塞爆記憶體
 app.use(express.json({ limit: "1mb" }));
 
-app.get("/health", (_req, res) => res.json({ ok: true }));
+// 服務啟動時間，用來判斷「改完環境變數後到底有沒有重啟」
+const STARTED_AT = new Date().toISOString();
+
+// 診斷用：只回布林值與數量，不吐出任何變數內容。
+// 今天（2026-07-22）發生過「Render 說部署完成、實際跑舊程式」以及
+// 「環境變數設了卻沒生效」，光從外面觀察分不出是哪一種，所以留這個端點。
+app.get("/health", (_req, res) =>
+  res.json({
+    ok: true,
+    startedAt: STARTED_AT,
+    corsRestricted: allowedOrigins.length > 0,
+    corsCount: allowedOrigins.length,
+    hasJwtSecret: !!process.env.JWT_SECRET,
+  })
+);
 
 app.use("/auth", authRouter);
 app.use("/customers", customersRouter);
