@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 import { api } from "../../../api/client";
 import OrdersPanel from "../../admin/OrdersPanel";
 import { C, TopBar, Checkbox, RouteTimeline, TimelineRoute, ProductSummary } from "../../../components/common";
+import { dispatchCityOf, dispatchCityIndex } from "../../../lib/taiwanCities";
 
 interface OrderItem {
   productName: string;
@@ -78,6 +79,24 @@ export default function ManagerSelect() {
   const allSelected = orders.length > 0 && selected.size === orders.length;
   const toggleSelectAll = () => {
     setSelected(allSelected ? new Set() : new Set(orders.map((o) => o.id)));
+  };
+
+  // 依縣市分組，順序為使用者指定的送貨路線順序（台北→新北→基隆→桃園→其他）
+  const cityGroups = useMemo(() => {
+    const map = new Map<string, Order[]>();
+    for (const o of orders) {
+      const city = dispatchCityOf(o.address);
+      if (!map.has(city)) map.set(city, []);
+      map.get(city)!.push(o);
+    }
+    return [...map.entries()].sort(([a], [b]) => dispatchCityIndex(a) - dispatchCityIndex(b));
+  }, [orders]);
+
+  const toggleCity = (group: Order[]) => {
+    const wasAll = group.every((o) => selected.has(o.id));
+    const s = new Set(selected);
+    for (const o of group) (wasAll ? s.delete(o.id) : s.add(o.id));
+    setSelected(s);
   };
   const togglePriority = (id: string) => {
     const s = new Set(priorityOverride);
@@ -201,19 +220,8 @@ export default function ManagerSelect() {
     <div>
       <TopBar title="派遣單勾選（物流主管）" accent={C.logiAccent} onBack={() => navigate("/route")} />
       {tabBar}
-      <div className="px-4 pt-3 pb-2 flex items-center justify-between" style={{ color: C.muted, fontFamily: "'Noto Sans TC', sans-serif" }}>
-        <div className="text-[12px]">待處理派遣單</div>
-        {orders.length > 0 && (
-          <button onClick={toggleSelectAll} className="flex items-center gap-1.5">
-            <Checkbox checked={allSelected} />
-            <span style={{ color: C.text }} className="text-[12px] font-bold">
-              全部勾選
-            </span>
-          </button>
-        )}
-      </div>
       {drivers.length > 0 && (
-        <div className="px-4 pb-2">
+        <div className="px-4 pt-3 pb-2">
           <label style={{ color: C.muted, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[12px] font-bold block mb-1">
             指派送貨人員
           </label>
@@ -235,49 +243,91 @@ export default function ManagerSelect() {
         {orders.length > 0 && (
           <ProductSummary title={summaryTitle} items={summaryOrders.flatMap((o) => o.items)} orderCount={summaryOrders.length} accent={C.logiAccent} />
         )}
-        {orders.map((o) => {
-          const isSel = selected.has(o.id);
-          const isPriority = priorityOverride.has(o.id);
+        {/* 待處理清單放在總計下方，中間用分隔線拉開，不要讓人誤讀成總計的一部分 */}
+        {orders.length > 0 && (
+          <div
+            className="mt-4 pt-3 mb-1 flex items-center justify-between border-t"
+            style={{ borderColor: C.hairline, color: C.muted, fontFamily: "'Noto Sans TC', sans-serif" }}
+          >
+            <div className="text-[12px]">待處理派遣單（依縣市分區）</div>
+            <button onClick={toggleSelectAll} className="flex items-center gap-1.5">
+              <Checkbox checked={allSelected} />
+              <span style={{ color: C.text }} className="text-[12px] font-bold">
+                全部勾選
+              </span>
+            </button>
+          </div>
+        )}
+        {cityGroups.map(([city, group]) => {
+          const cityAll = group.every((o) => selected.has(o.id));
+          const citySelected = group.filter((o) => selected.has(o.id)).length;
           return (
-            <div key={o.id} className="mb-2 rounded-xl p-3" style={{ background: "#fff", border: `1px solid ${isSel ? C.logiAccent : C.hairline}` }}>
-              <div className="flex items-start gap-3">
-                <button onClick={() => toggleSel(o.id)} className="mt-0.5">
-                  <Checkbox checked={isSel} />
-                </button>
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span style={{ fontFamily: "Manrope", color: C.muted }} className="text-[11px] font-bold">
-                      {o.customerCode}
-                    </span>
-                    <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-semibold text-[13px]">
-                      {o.customerName}
-                    </span>
-                  </div>
-                  <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
-                    {o.address}
-                  </div>
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {o.items.map((p, pi) => (
-                      <span key={pi} style={{ background: C.bg, color: C.text }} className="text-[11px] px-1.5 py-0.5 rounded">
-                        {p.productName} ×{p.quantity}
-                      </span>
-                    ))}
-                  </div>
-                  {isSel && (
-                    <button onClick={() => togglePriority(o.id)} className="mt-2 flex items-center gap-1">
-                      <div
-                        className="flex items-center justify-center rounded"
-                        style={{ width: 16, height: 16, border: `2px solid ${isPriority ? C.gold : C.hairline}`, background: isPriority ? C.gold : "transparent" }}
-                      >
-                        {isPriority && <span style={{ color: "#fff", fontSize: 10 }}>✓</span>}
+            <div key={city} className="mt-3">
+              {/* 縣市分隔＋整區勾選 */}
+              <button
+                onClick={() => toggleCity(group)}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg mb-2"
+                style={{ background: C.logiAccentSoft }}
+              >
+                <Checkbox checked={cityAll} />
+                <span style={{ color: C.logiAccent, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[13px] font-bold">
+                  {city}
+                </span>
+                <span style={{ color: C.muted, fontFamily: "Manrope" }} className="text-[11px] font-bold ml-auto">
+                  {citySelected}/{group.length}
+                </span>
+              </button>
+              {group.map((o) => {
+                const isSel = selected.has(o.id);
+                const isPriority = priorityOverride.has(o.id);
+                return (
+                  <div key={o.id} className="mb-2 rounded-xl p-3" style={{ background: "#fff", border: `1px solid ${isSel ? C.logiAccent : C.hairline}` }}>
+                    <div className="flex items-start gap-3">
+                      <button onClick={() => toggleSel(o.id)} className="mt-0.5">
+                        <Checkbox checked={isSel} />
+                      </button>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span style={{ fontFamily: "Manrope", color: C.muted }} className="text-[11px] font-bold">
+                            {o.customerCode}
+                          </span>
+                          <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-semibold text-[13px]">
+                            {o.customerName}
+                          </span>
+                        </div>
+                        <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
+                          {o.address}
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {o.items.map((p, pi) => (
+                            <span key={pi} style={{ background: C.bg, color: C.text }} className="text-[11px] px-1.5 py-0.5 rounded">
+                              {p.productName} ×{p.quantity}
+                            </span>
+                          ))}
+                        </div>
+                        {isSel && (
+                          <button onClick={() => togglePriority(o.id)} className="mt-2 flex items-center gap-1">
+                            <div
+                              className="flex items-center justify-center rounded"
+                              style={{
+                                width: 16,
+                                height: 16,
+                                border: `2px solid ${isPriority ? C.gold : C.hairline}`,
+                                background: isPriority ? C.gold : "transparent",
+                              }}
+                            >
+                              {isPriority && <span style={{ color: "#fff", fontSize: 10 }}>✓</span>}
+                            </div>
+                            <span style={{ color: isPriority ? C.gold : C.muted, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[11px] font-bold">
+                              標記為優先客戶（本次配送）
+                            </span>
+                          </button>
+                        )}
                       </div>
-                      <span style={{ color: isPriority ? C.gold : C.muted, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[11px] font-bold">
-                        標記為優先客戶（本次配送）
-                      </span>
-                    </button>
-                  )}
-                </div>
-              </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           );
         })}
