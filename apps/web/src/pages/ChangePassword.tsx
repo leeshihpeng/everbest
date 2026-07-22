@@ -28,7 +28,9 @@ export default function ChangePassword({ forced = false }: { forced?: boolean })
 
     setSaving(true);
     try {
-      await api.changePassword(current, next);
+      // 改密碼會讓舊 token 失效，要換上後端回傳的新 token，否則下一個請求就變成未登入
+      const { token } = await api.changePassword(current, next);
+      if (token) localStorage.setItem("token", token);
       clearMustChangePassword();
       setDone(true);
     } catch (err) {

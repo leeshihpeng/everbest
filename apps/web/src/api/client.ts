@@ -110,8 +110,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name, password }),
     }),
+  // 回傳新 token：改密碼會讓舊 token 失效，不換掉的話自己會被登出
   changePassword: (currentPassword: string, newPassword: string) =>
-    request<{ ok: true }>("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
+    request<{ ok: true; token: string }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
   resetStaffPassword: (id: string) => request<{ tempPassword: string }>(`/staff/${id}/reset-password`, { method: "POST" }),
   getCustomers: () => request<any[]>("/customers"),
   createCustomer: (data: unknown) =>

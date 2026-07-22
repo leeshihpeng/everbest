@@ -20,7 +20,9 @@ customersRouter.get("/", async (_req, res, next) => {
   }
 });
 
-customersRouter.post("/", async (req, res, next) => {
+// 新增客戶是業務／內勤的工作。沒有這層限制，送貨人員或倉管的 token 也能新增客戶，
+// 順帶消耗 Google 定位額度。
+customersRouter.post("/", requireRole(["SALES", "MANAGER", "ADMIN"]), async (req, res, next) => {
   try {
     const { code, name, address, phone, isPriority } = req.body;
     const coords = await geocodeAddress(address);

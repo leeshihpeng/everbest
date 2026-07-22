@@ -123,9 +123,10 @@ staffRouter.post("/:id/reset-password", requireRole("ADMIN"), async (req, res, n
     if (!target) return res.status(404).json({ error: "找不到人員" });
 
     const tempPassword = generateTempPassword();
+    // passwordChangedAt 讓對方所有既有登入立刻失效——帳號被盜時，重設密碼才真的能把人踢掉
     await prisma.staff.update({
       where: { id: target.id },
-      data: { passwordHash: await bcrypt.hash(tempPassword, 10), mustChangePassword: true },
+      data: { passwordHash: await bcrypt.hash(tempPassword, 10), mustChangePassword: true, passwordChangedAt: new Date() },
     });
     // 臨時密碼只在這個回應出現一次，資料庫存的是雜湊值，之後沒有任何地方查得到
     res.json({ tempPassword });

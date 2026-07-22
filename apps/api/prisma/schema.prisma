@@ -37,6 +37,7 @@ model Staff {
   salesRegions String?    // 業務人員可選客戶的縣市範圍，逗號分隔（如 "台北市,新北市"）；空值＝不限制
   passwordHash String?    // 簡易登入用（PIN 或密碼雜湊）
   mustChangePassword Boolean @default(false) // 主管重設密碼後為 true，本人登入後必須先設定新密碼
+  passwordChangedAt DateTime? // 密碼變更時間；比這個時間早簽發的 token 一律失效（見 middleware/auth.ts）
   orders      DispatchOrder[] @relation("AssignedDriver")
   notifications Notification[]
   createdAt   DateTime    @default(now())

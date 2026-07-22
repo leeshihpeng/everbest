@@ -94,11 +94,16 @@ authRouter.post("/change-password", requireAuth, async (req: AuthedRequest, res,
     const valid = await bcrypt.compare(currentPassword ?? "", staff.passwordHash);
     if (!valid) return res.status(401).json({ error: "目前密碼不正確" });
 
+    // passwordChangedAt 會讓所有舊 token 立刻失效（見 middleware/auth.ts）——
+    // 密碼被盜時改密碼才真的能把對方踢掉。本人手上這一份要換新的，否則自己也被登出。
+    const changedAt = new Date();
     await prisma.staff.update({
       where: { id: staff.id },
-      data: { passwordHash: await bcrypt.hash(newPassword!, 10), mustChangePassword: false },
+      data: { passwordHash: await bcrypt.hash(newPassword!, 10), mustChangePassword: false, passwordChangedAt: changedAt },
     });
-    res.json({ ok: true });
+
+    const token = signStaffToken({ id: staff.id, name: staff.name, roles: rolesToArray(staff.roles) });
+    res.json({ ok: true, token });
   } catch (err) {
     next(err);
   }
