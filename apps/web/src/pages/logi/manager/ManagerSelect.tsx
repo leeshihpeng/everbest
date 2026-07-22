@@ -5,6 +5,7 @@ import { api } from "../../../api/client";
 import OrdersPanel from "../../admin/OrdersPanel";
 import { C, TopBar, Checkbox, RouteTimeline, TimelineRoute, ProductSummary, QtySubtotal } from "../../../components/common";
 import { dispatchCityOf, dispatchCityIndex } from "../../../lib/taiwanCities";
+import { getAuthedStaff } from "../../../lib/auth";
 
 interface OrderItem {
   productName: string;
@@ -33,6 +34,9 @@ interface Settings {
 
 export default function ManagerSelect() {
   const navigate = useNavigate();
+  // 倉管只能看：勾選、指派送貨人員、優先標記、送出全部不顯示。
+  // 後端同樣擋著（/orders/select 與 PUT /orders 都要 MANAGER），前端只是不要給看得到卻按不動的按鈕。
+  const canEdit = !!getAuthedStaff()?.roles.includes("MANAGER");
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [drivers, setDrivers] = useState<Staff[]>([]);
@@ -74,7 +78,11 @@ export default function ManagerSelect() {
   };
   // 尚未勾選時先顯示全部待處理的總計，勾選後只算已勾選的——兩者數量本來就不同
   const summaryOrders = selected.size > 0 ? orders.filter((o) => selected.has(o.id)) : orders;
-  const summaryTitle = selected.size > 0 ? `已勾選貨品總計（${selected.size} 筆）` : "待處理貨品總計（尚未勾選）";
+  const summaryTitle = !canEdit
+    ? "待處理貨品總計"
+    : selected.size > 0
+    ? `已勾選貨品總計（${selected.size} 筆）`
+    : "待處理貨品總計（尚未勾選）";
 
   const allSelected = orders.length > 0 && selected.size === orders.length;
   const toggleSelectAll = () => {
@@ -189,8 +197,8 @@ export default function ManagerSelect() {
     <div className="px-4 pt-3 flex gap-2">
       {(
         [
-          ["select", "派遣單勾選"],
-          ["manage", "派遣單管理"],
+          ["select", canEdit ? "派遣單勾選" : "待處理派遣單"],
+          ["manage", canEdit ? "派遣單管理" : "全部派遣單"],
         ] as ["select" | "manage", string][]
       ).map(([key, label]) => (
         <button
@@ -210,7 +218,7 @@ export default function ManagerSelect() {
   if (tab === "manage") {
     return (
       <div>
-        <TopBar title="派遣單管理（物流主管）" accent={C.logiAccent} onBack={() => navigate("/route")} />
+        <TopBar title={canEdit ? "派遣單管理（物流主管）" : "全部派遣單（檢視）"} accent={C.logiAccent} onBack={() => navigate("/route")} />
         {tabBar}
         <OrdersPanel allowImport={false} />
       </div>
@@ -219,9 +227,9 @@ export default function ManagerSelect() {
 
   return (
     <div>
-      <TopBar title="派遣單勾選（物流主管）" accent={C.logiAccent} onBack={() => navigate("/route")} />
+      <TopBar title={canEdit ? "派遣單勾選（物流主管）" : "待處理派遣單（檢視）"} accent={C.logiAccent} onBack={() => navigate("/route")} />
       {tabBar}
-      {drivers.length > 0 && (
+      {canEdit && drivers.length > 0 && (
         <div className="px-4 pt-3 pb-2">
           <label style={{ color: C.muted, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[12px] font-bold block mb-1">
             指派送貨人員
@@ -240,7 +248,7 @@ export default function ManagerSelect() {
           </select>
         </div>
       )}
-      <div className="px-4 pb-28">
+      <div className={canEdit ? "px-4 pb-28" : "px-4 pb-6"}>
         {orders.length > 0 && (
           <ProductSummary title={summaryTitle} items={summaryOrders.flatMap((o) => o.items)} orderCount={summaryOrders.length} accent={C.logiAccent} />
         )}
@@ -251,12 +259,14 @@ export default function ManagerSelect() {
             style={{ borderColor: C.hairline, color: C.muted, fontFamily: "'Noto Sans TC', sans-serif" }}
           >
             <div className="text-[12px]">待處理派遣單（依縣市分區）</div>
-            <button onClick={toggleSelectAll} className="flex items-center gap-1.5">
-              <Checkbox checked={allSelected} />
-              <span style={{ color: C.text }} className="text-[12px] font-bold">
-                全部勾選
-              </span>
-            </button>
+            {canEdit && (
+              <button onClick={toggleSelectAll} className="flex items-center gap-1.5">
+                <Checkbox checked={allSelected} />
+                <span style={{ color: C.text }} className="text-[12px] font-bold">
+                  全部勾選
+                </span>
+              </button>
+            )}
           </div>
         )}
         {cityGroups.map(([city, group]) => {
@@ -266,16 +276,17 @@ export default function ManagerSelect() {
             <div key={city} className="mt-3">
               {/* 縣市分隔＋整區勾選 */}
               <button
-                onClick={() => toggleCity(group)}
+                onClick={() => canEdit && toggleCity(group)}
+                disabled={!canEdit}
                 className="w-full flex items-center gap-2 px-3 py-2 rounded-lg mb-2"
                 style={{ background: C.logiAccentSoft }}
               >
-                <Checkbox checked={cityAll} />
+                {canEdit && <Checkbox checked={cityAll} />}
                 <span style={{ color: C.logiAccent, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[13px] font-bold">
                   {city}
                 </span>
                 <span style={{ color: C.muted, fontFamily: "Manrope" }} className="text-[11px] font-bold ml-auto">
-                  {citySelected}/{group.length}
+                  {canEdit ? `${citySelected}/${group.length}` : `${group.length} 筆`}
                 </span>
               </button>
               {group.map((o) => {
@@ -284,9 +295,11 @@ export default function ManagerSelect() {
                 return (
                   <div key={o.id} className="mb-2 rounded-xl p-3" style={{ background: "#fff", border: `1px solid ${isSel ? C.logiAccent : C.hairline}` }}>
                     <div className="flex items-start gap-3">
-                      <button onClick={() => toggleSel(o.id)} className="mt-0.5">
-                        <Checkbox checked={isSel} />
-                      </button>
+                      {canEdit && (
+                        <button onClick={() => toggleSel(o.id)} className="mt-0.5">
+                          <Checkbox checked={isSel} />
+                        </button>
+                      )}
                       <div className="flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span style={{ fontFamily: "Manrope", color: C.muted }} className="text-[11px] font-bold">
@@ -307,7 +320,7 @@ export default function ManagerSelect() {
                           ))}
                           {o.items.length > 0 && <QtySubtotal total={o.items.reduce((s, p) => s + p.quantity, 0)} accent={C.logiAccent} />}
                         </div>
-                        {isSel && (
+                        {canEdit && isSel && (
                           <button onClick={() => togglePriority(o.id)} className="mt-2 flex items-center gap-1">
                             <div
                               className="flex items-center justify-center rounded"
@@ -344,16 +357,18 @@ export default function ManagerSelect() {
           {submitError}
         </div>
       )}
-      <div className="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto p-4" style={{ background: "linear-gradient(to top, #F2F4F7 70%, transparent)" }}>
-        <button
-          onClick={handleSubmit}
-          disabled={selected.size === 0 || !driverId || submitting}
-          style={{ background: selected.size && driverId ? C.logiAccent : "#B9C2D0" }}
-          className="w-full text-white font-bold text-[14px] py-3 rounded-xl shadow-lg disabled:opacity-70"
-        >
-          {submitting ? "送出中…" : `送出（已選 ${selected.size} 筆・指派送貨人員並產生路線）`}
-        </button>
-      </div>
+      {canEdit && (
+        <div className="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto p-4" style={{ background: "linear-gradient(to top, #F2F4F7 70%, transparent)" }}>
+          <button
+            onClick={handleSubmit}
+            disabled={selected.size === 0 || !driverId || submitting}
+            style={{ background: selected.size && driverId ? C.logiAccent : "#B9C2D0" }}
+            className="w-full text-white font-bold text-[14px] py-3 rounded-xl shadow-lg disabled:opacity-70"
+          >
+            {submitting ? "送出中…" : `送出（已選 ${selected.size} 筆・指派送貨人員並產生路線）`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

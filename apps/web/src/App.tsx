@@ -63,7 +63,7 @@ function MainDirectory() {
   const systems: { key: string; label: string; sub: string; icon: LucideIcon; to: string; color: string; soft: string; show: boolean }[] = [
     { key: "admin", label: "內勤後台", sub: "客戶／人員／派遣單管理", icon: Building2, to: "/admin", color: C.navy, soft: "#EDEFF2", show: isAdmin },
     // 路線排程系統裡的模組只對業務／物流主管／送貨人員開放，其他人進去會是空的，所以不顯示
-    { key: "route", label: "路線排程系統", sub: "業務／物流／送貨／內勤管理", icon: Map, to: "/route", color: C.logiAccent, soft: C.logiAccentSoft, show: !!staff && ["SALES", "MANAGER", "DRIVER"].some((r) => staff.roles.includes(r)) },
+    { key: "route", label: "路線排程系統", sub: "業務／物流／送貨／內勤管理", icon: Map, to: "/route", color: C.logiAccent, soft: C.logiAccentSoft, show: !!staff && ["SALES", "MANAGER", "DRIVER", "WAREHOUSE"].some((r) => staff.roles.includes(r)) },
     { key: "carrier", label: "貨運派遣", sub: "新竹貨運／大榮貨運出貨清點", icon: Truck, to: "/carrier", color: C.logiAccent, soft: C.logiAccentSoft, show: canCarrierDispatch },
     { key: "inspection", label: "檢驗報告", sub: "產品檢驗報告查詢與管理", icon: ClipboardCheck, to: "/inspection", color: C.bizAccent, soft: C.bizAccentSoft, show: canBizSystems },
     { key: "permit", label: "輸入許可證", sub: "進口許可證申請與追蹤", icon: FileText, to: "/permit", color: C.gold, soft: C.goldSoft, show: canBizSystems },
@@ -189,17 +189,18 @@ function RouteSchedulerHome() {
             <ChevronRight size={18} color={C.muted} />
           </Link>
         )}
-        {staff?.roles.includes("MANAGER") && (
+        {/* 倉管也看得到，但只能看：勾選、指派、優先標記都不會出現（ManagerSelect 的 canEdit） */}
+        {(staff?.roles.includes("MANAGER") || staff?.roles.includes("WAREHOUSE")) && (
           <Link to="/logi/manager" className="w-full flex items-center gap-3 rounded-2xl p-4 mb-3 shadow-sm" style={{ background: "#fff" }}>
             <div className="rounded-xl flex items-center justify-center" style={{ width: 46, height: 46, background: C.logiAccentSoft }}>
               <Truck size={22} color={C.logiAccent} />
             </div>
             <div className="text-left flex-1">
               <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[15px]">
-                物流模式 — 物流主管
+                {staff?.roles.includes("MANAGER") ? "物流模式 — 物流主管" : "物流模式 — 派遣單檢視"}
               </div>
               <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
-                派遣單勾選與優先標記
+                {staff?.roles.includes("MANAGER") ? "派遣單勾選與優先標記" : "查看派遣單與貨品數量（唯讀）"}
               </div>
             </div>
             <ChevronRight size={18} color={C.muted} />
@@ -222,7 +223,7 @@ function RouteSchedulerHome() {
           </Link>
         )}
         {/* 內勤後台已移到主目錄首位，這裡不再重複顯示 */}
-        {staff && !["SALES", "MANAGER", "DRIVER"].some((r) => staff.roles.includes(r)) && (
+        {staff && !["SALES", "MANAGER", "DRIVER", "WAREHOUSE"].some((r) => staff.roles.includes(r)) && (
           <div style={{ color: C.muted }} className="text-center text-[13px] py-8">
             你的帳號目前沒有指派任何操作權限，請聯絡管理員。
           </div>
@@ -312,7 +313,8 @@ export default function App() {
               <Route
                 path="/logi/manager"
                 element={
-                  <RequireRole role="MANAGER">
+                  // 倉管可進入，但頁面內是唯讀（後端也擋：/orders/select 與 PUT /orders 都要 MANAGER）
+                  <RequireRole role={["MANAGER", "WAREHOUSE"]}>
                     <ManagerSelect />
                   </RequireRole>
                 }
