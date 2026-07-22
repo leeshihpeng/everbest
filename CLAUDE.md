@@ -53,6 +53,9 @@
 - `errorHandler` **只回概括訊息**，詳細錯誤僅寫入伺服器日誌
   （原本會把 Neon 主機位址、原始碼路徑吐給前端）。
 - 設 `CORS_ORIGINS` 限制來源；所有上傳都有 30MB 上限；JSON 限 1MB。
+  - 排查用 `GET /health`：會回 `startedAt`／`corsRestricted`／`corsCount`／`hasJwtSecret`（只有布林與數量，不吐內容）。
+    曾發生 Render 環境變數畫面上看起來設好了、程式卻讀不到（`corsCount:0`），
+    多半是**變數名稱結尾多了空白**——整列刪掉重打即可。**判斷有沒有生效看這個端點，不要看 Render 畫面。**
 - 密碼規則見 `utils/password.ts`（前端 `lib/password.ts` 有同一份，改規則兩邊一起改）：
   至少 6 個字、不能有空白。新增人員／修改密碼／重設後設定新密碼都走這個檢查。
 - 忘記密碼＝主管按「重設密碼」，系統發一組**一次性 6 位臨時密碼**（只在該次回應顯示，

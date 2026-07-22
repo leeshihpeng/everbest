@@ -30,7 +30,9 @@ app.use(
           origin: (origin, cb) => {
             // same-origin／curl 等沒有 Origin 標頭的請求一律放行
             if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-            cb(new Error("不允許的來源"));
+            // 帶 status 讓 errorHandler 回 403；不加的話會變成 500，
+            // 把「正常擋掉外部網站」跟「系統真的壞了」混在一起。
+            cb(Object.assign(new Error("不允許的來源"), { status: 403 }));
           },
         }
       : undefined
