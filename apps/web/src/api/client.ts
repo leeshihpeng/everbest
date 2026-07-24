@@ -234,6 +234,7 @@ export const api = {
     return uploadFile<{
       imported: number;
       replaced: number;
+      purged: number;
       unclassified: number;
       summary: Record<string, number>;
       errors: string[];

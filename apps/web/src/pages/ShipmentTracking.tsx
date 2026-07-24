@@ -81,8 +81,10 @@ export default function ShipmentTracking() {
       if (fileRef.current) fileRef.current.value = "";
       const parts = Object.entries(r.summary).map(([k, v]) => `${k} ${v} 筆`);
       setImportMsg(
-        `已清除舊資料 ${r.replaced} 筆，匯入 ${r.imported} 筆` +
+        `已匯入 ${r.imported} 筆` +
           (parts.length ? `（${parts.join("、")}）` : "") +
+          (r.replaced > 0 ? `；更新同日既有資料 ${r.replaced} 筆` : "") +
+          (r.purged > 0 ? `；清除兩週前的舊報表 ${r.purged} 筆` : "") +
           (r.unclassified > 0 ? `；其中 ${r.unclassified} 筆地址判不出區域，已歸入「未分類」` : "")
       );
       if (r.errors.length > 0) setError(r.errors.join("；"));
@@ -196,11 +198,27 @@ export default function ShipmentTracking() {
                 {rows.reduce((s, r) => s + r.weight, 0)} 公斤
               </span>
               <span style={{ color: C.muted }} className="text-[11px]">
-                {rows[0] && fmtDate(rows[0].shipDate)}
+                保留兩週內報表
               </span>
             </div>
-            {rows.map((r) => (
-              <div key={r.id} className="rounded-xl p-3 mb-2" style={{ background: "#fff", border: `1px solid ${C.hairline}` }}>
+            {rows.map((r, i) => {
+              const date = fmtDate(r.shipDate);
+              const newDay = i === 0 || fmtDate(rows[i - 1].shipDate) !== date;
+              const dayRows = newDay ? rows.filter((x) => fmtDate(x.shipDate) === date) : [];
+              return (
+              <div key={r.id}>
+                {newDay && (
+                  <div className={`flex items-center justify-between mb-1.5 px-1 ${i === 0 ? "" : "mt-4"}`}>
+                    <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[13px]">
+                      {date}
+                    </span>
+                    <span style={{ color: C.muted }} className="text-[11px]">
+                      {dayRows.length} 筆・{dayRows.reduce((s, x) => s + x.pieces, 0)} 件・
+                      {dayRows.reduce((s, x) => s + x.weight, 0)} 公斤
+                    </span>
+                  </div>
+                )}
+              <div className="rounded-xl p-3 mb-2" style={{ background: "#fff", border: `1px solid ${C.hairline}` }}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[14px] break-all">
@@ -261,7 +279,9 @@ export default function ShipmentTracking() {
                   </div>
                 )}
               </div>
-            ))}
+              </div>
+              );
+            })}
           </>
         )}
       </div>

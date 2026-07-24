@@ -93,8 +93,9 @@ shipmentsRouter.post("/import", requireRole("ADMIN"), upload.array("files"), asy
     const errors: string[] = [];
     const summary: Record<string, number> = {};
 
-    // 這兩份報表每天各上傳一次，代表當日全量。先全部解析成功再整批取代該業者的舊資料，
-    // 解析失敗就不動舊資料，避免把好的資料清掉卻換不到新的。
+    // 這兩份報表每天各上傳一次，代表當日全量。先全部解析成功再寫入：
+    // 只取代「該業者同一報表日期」的舊資料（同天重傳＝更正），其他日期保留兩星期讓業務回查，
+    // 過期資料在匯入時順手清除。解析失敗就不動舊資料，避免把好的資料清掉卻換不到新的。
     const byCarrier = new Map<string, ParsedShipment[]>();
 
     for (const f of files) {
@@ -134,13 +135,20 @@ shipmentsRouter.post("/import", requireRole("ADMIN"), upload.array("files"), asy
     let imported = 0;
     let replaced = 0;
     for (const [carrier, rows] of byCarrier) {
-      const removed = await prisma.shipment.deleteMany({ where: { carrier } });
+      const dates = [...new Set(rows.map((r) => r.shipDate.getTime()))].map((t) => new Date(t));
+      const removed = await prisma.shipment.deleteMany({ where: { carrier, shipDate: { in: dates } } });
       replaced += removed.count;
-      await prisma.shipment.createMany({ data: rows });
-      imported += rows.length;
+      // skipDuplicates：同一批 PDF 內偶發重複單號時略過，不讓整批匯入失敗
+      const created = await prisma.shipment.createMany({ data: rows, skipDuplicates: true });
+      imported += created.count;
     }
 
-    res.json({ imported, replaced, unclassified, summary, errors });
+    // 保留兩星期供業務回查，更舊的順手清掉
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 14);
+    const purged = (await prisma.shipment.deleteMany({ where: { shipDate: { lt: cutoff } } })).count;
+
+    res.json({ imported, replaced, purged, unclassified, summary, errors });
   } catch (err) {
     next(err);
   }
