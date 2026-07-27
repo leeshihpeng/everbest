@@ -6,7 +6,7 @@ import { getAuthedStaff } from "../../lib/auth";
 import { C, TopBar, PriorityTag, OriginCard, RouteTimeline, ActionRow, TimelineRoute } from "../../components/common";
 import { RouteMap } from "../../components/RouteMap";
 import { buildNavigationUrl } from "../../lib/googleMapsLoader";
-import { cityOrderIndex } from "../../lib/taiwanCities";
+import { cityOrderIndex, isCentralSouthOnly } from "../../lib/taiwanCities";
 import { formatRouteShareText, shareRouteText } from "../../lib/routeShare";
 
 interface Customer {
@@ -79,8 +79,15 @@ export default function BizSetup() {
       try {
         const [customerList, staffList, s] = await Promise.all([api.getCustomers(), api.getStaff(), api.getSettings()]);
         setCustomers(customerList);
-        setSelf(staffList.find((s: Staff) => s.id === me.id) ?? null);
+        const selfStaff = staffList.find((st: Staff) => st.id === me.id) ?? null;
+        setSelf(selfStaff);
         setSettings(s);
+        // 中南部業務（許鴻章、柯月惠）常駐外地，拜訪路線預設從住家出發、回住家；
+        // 其他人維持預設公司。畫面上的切換鈕仍可自行改。
+        if (isCentralSouthOnly(selfStaff?.salesRegions)) {
+          setOrigin("home");
+          setDestination("home");
+        }
       } catch (err) {
         setError((err as Error).message);
       } finally {

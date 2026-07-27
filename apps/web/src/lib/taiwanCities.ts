@@ -32,3 +32,13 @@ export function dispatchCityIndex(city: string): number {
   const idx = DISPATCH_CITIES.indexOf(city);
   return idx === -1 ? DISPATCH_CITIES.length : idx;
 }
+
+/** 北部縣市前綴，與後端 shipmentParser 的 REGION_BY_CITY 北部一致，改動時請一起改 */
+const NORTHERN_PREFIXES = ["基隆", "台北", "臺北", "新北", "桃園", "新竹", "宜蘭", "花蓮", "台東", "臺東"];
+
+/** 業務範圍有設定且完全落在中南部（目前是許鴻章、柯月惠）。
+ *  用範圍判斷而非寫死姓名：之後調整業務範圍，相關預設會自動跟著變。 */
+export function isCentralSouthOnly(salesRegions: string[] | undefined | null): boolean {
+  if (!salesRegions || salesRegions.length === 0) return false;
+  return salesRegions.every((city) => !NORTHERN_PREFIXES.some((p) => city.startsWith(p)));
+}
