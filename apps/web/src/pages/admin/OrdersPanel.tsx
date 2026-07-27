@@ -25,6 +25,7 @@ interface Order {
   isPriority: boolean;
   assignedDriverId?: string | null;
   lat?: number | null;
+  orderNote?: string | null;
   items: OrderItem[];
 }
 
@@ -311,6 +312,18 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
                 <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
                   {o.address}
                 </div>
+                {/* 貨單附註：出貨時交代的事項，內勤要看得到才能核對 */}
+                {o.orderNote && (
+                  <div
+                    className="mt-1 text-[11px] px-1.5 py-0.5 rounded"
+                    style={{ background: C.goldSoft, color: C.text, whiteSpace: "pre-wrap" }}
+                  >
+                    <span style={{ color: C.gold }} className="font-bold">
+                      貨單附註：
+                    </span>
+                    {o.orderNote}
+                  </div>
+                )}
                 <div className="mt-1 flex flex-wrap items-center gap-1">
                   {o.items.map((it, i) => (
                     <span key={i} style={{ background: C.logiAccentSoft, color: C.logiAccent }} className="text-[11px] px-1.5 py-0.5 rounded">

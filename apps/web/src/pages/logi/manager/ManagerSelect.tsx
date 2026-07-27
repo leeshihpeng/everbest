@@ -17,6 +17,7 @@ interface Order {
   customerCode: string;
   customerName: string;
   address: string;
+  orderNote?: string | null;
   items: OrderItem[];
 }
 
@@ -138,6 +139,7 @@ export default function ManagerSelect() {
             isPriority: priorityOverride.has(o.id),
             legDistanceKm: leg.legDistanceKm,
             legDurationMin: leg.legDurationMin,
+            note: o.orderNote ?? undefined,
             products: o.items.map((i) => ({ name: i.productName, qty: i.quantity })),
           };
         }),
@@ -312,6 +314,18 @@ export default function ManagerSelect() {
                         <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
                           {o.address}
                         </div>
+                        {/* 貨單附註：勾選配送時就要看到，才能決定優先順序或特別交代 */}
+                        {o.orderNote && (
+                          <div
+                            className="mt-1 text-[11px] px-1.5 py-0.5 rounded"
+                            style={{ background: C.goldSoft, color: C.text, whiteSpace: "pre-wrap" }}
+                          >
+                            <span style={{ color: C.gold }} className="font-bold">
+                              貨單附註：
+                            </span>
+                            {o.orderNote}
+                          </div>
+                        )}
                         <div className="mt-1.5 flex flex-wrap gap-1">
                           {o.items.map((p, pi) => (
                             <span key={pi} style={{ background: C.bg, color: C.text }} className="text-[11px] px-1.5 py-0.5 rounded">
