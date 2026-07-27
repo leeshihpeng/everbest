@@ -564,7 +564,7 @@ export function ActionRow({ accent, onShare, onNavigate }: { accent: string; onS
         style={{ background: "#fff", border: `1px solid ${C.hairline}`, color: C.text }}
         className="flex-1 flex items-center justify-center gap-1.5 text-[13px] font-bold py-2.5 rounded-xl active:opacity-80"
       >
-        <Share2 size={15} /> 分享到 LINE 群組
+        <Share2 size={15} /> 分享路線
       </button>
     </div>
   );
