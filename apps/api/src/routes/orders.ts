@@ -334,11 +334,11 @@ ordersRouter.put("/route-order", async (req: AuthedRequest, res, next) => {
   }
 });
 
-// 更新派遣單狀態（例如送貨人員標記完成）
+// 更新派遣單狀態（例如送貨人員標記完成、貨運派遣頁取消「已交貨運行」退回 PENDING）
 ordersRouter.patch("/:id/status", async (req: AuthedRequest, res, next) => {
   try {
-    const { status } = req.body as { status: "DISPATCHED" | "COMPLETED" };
-    if (status !== "DISPATCHED" && status !== "COMPLETED") {
+    const { status } = req.body as { status: "PENDING" | "DISPATCHED" | "COMPLETED" };
+    if (status !== "PENDING" && status !== "DISPATCHED" && status !== "COMPLETED") {
       return res.status(400).json({ error: "狀態值不正確" });
     }
 

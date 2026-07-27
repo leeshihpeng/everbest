@@ -175,7 +175,7 @@ export const api = {
       unroutedCount: number;
       unroutedOrderNames: string[];
     }>("/orders/select", { method: "POST", body: JSON.stringify(body) }),
-  updateOrderStatus: (id: string, status: "DISPATCHED" | "COMPLETED") =>
+  updateOrderStatus: (id: string, status: "PENDING" | "DISPATCHED" | "COMPLETED") =>
     request(`/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
   // 送貨人員自行調整送貨順序；manual=false＝還原成系統自動排序
   updateRouteOrder: (orderIds: string[], manual = true) =>

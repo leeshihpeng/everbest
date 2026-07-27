@@ -101,13 +101,15 @@ export default function CarrierDispatch() {
     }
   }
 
-  async function markCompleted(o: Order) {
-    if (!confirm(`確定「${o.customerName}」已交給${carrier}？`)) return;
+  // 標記／取消「已交貨運行」。不再跳確認框，改成按了立即生效、單子留在畫面上
+  // 讓按鈕變色顯示狀態，按錯再按一次就取消（離開頁面後已交的才不再顯示）。
+  async function toggleCompleted(o: Order) {
+    const next = o.status === "COMPLETED" ? "PENDING" : "COMPLETED";
     setBusyId(o.id);
     setError(null);
     try {
-      await api.updateOrderStatus(o.id, "COMPLETED");
-      setOrders((prev) => prev.filter((x) => x.id !== o.id));
+      await api.updateOrderStatus(o.id, next);
+      setOrders((prev) => prev.map((x) => (x.id === o.id ? { ...x, status: next } : x)));
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -115,7 +117,9 @@ export default function CarrierDispatch() {
     }
   }
 
-  const summaryItems = useMemo(() => orders.flatMap((o) => o.items), [orders]);
+  // 貨品總計只算還沒交出去的，交完的不必再清點
+  const summaryOrders = useMemo(() => orders.filter((o) => o.status !== "COMPLETED"), [orders]);
+  const summaryItems = useMemo(() => summaryOrders.flatMap((o) => o.items), [summaryOrders]);
 
   return (
     <div>
@@ -166,7 +170,7 @@ export default function CarrierDispatch() {
             <ProductSummary
               title={`${carrier}貨品總計`}
               items={summaryItems}
-              orderCount={orders.length}
+              orderCount={summaryOrders.length}
               accent={C.logiAccent}
             />
             {orders.map((o) => {
@@ -212,15 +216,20 @@ export default function CarrierDispatch() {
                   </div>
 
                   <div className="flex justify-end mt-2">
-                    {/* 這是「交貨」動作鈕，樣式固定；若跟著檢貨狀態變色，
-                        會讓人誤以為已經交給貨運行了 */}
+                    {/* 按鈕文字與顏色跟著「是否已交貨運行」變化：
+                        沒按＝白底「交貨運行」，按了＝綠底「✓ 已交貨運行」，再按一次取消 */}
                     <button
-                      onClick={() => markCompleted(o)}
+                      onClick={() => toggleCompleted(o)}
                       disabled={busyId === o.id}
-                      style={{ border: `1px solid ${C.logiAccent}`, color: C.logiAccent }}
+                      style={
+                        o.status === "COMPLETED"
+                          ? { background: C.success, border: `1px solid ${C.success}`, color: "#fff" }
+                          : { background: "#fff", border: `1px solid ${C.logiAccent}`, color: C.logiAccent }
+                      }
                       className="flex items-center gap-1 text-[12px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-60"
                     >
-                      <Check size={14} /> {busyId === o.id ? "處理中…" : "已交貨運行"}
+                      {o.status === "COMPLETED" && <Check size={14} />}
+                      {busyId === o.id ? "處理中…" : o.status === "COMPLETED" ? "已交貨運行" : "交貨運行"}
                     </button>
                   </div>
                 </div>
