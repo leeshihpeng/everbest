@@ -69,6 +69,8 @@ model DispatchOrder {
   routeOrderManual Boolean             @default(false)
   orderNo          String? // 出貨編號（新竹／大榮派遣單）
   weight           Float? // 重量（新竹／大榮派遣單）
+  // 貨單附註：CSV 的「貨單附註」欄，原文照抄顯示給送貨人員看（與拿來解析品項的「託運備註」不同欄）
+  orderNote        String?
   lat              Float?
   lng              Float?
   items            DispatchOrderItem[]

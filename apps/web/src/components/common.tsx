@@ -211,6 +211,7 @@ export interface TimelineStop {
   legDistanceKm: number;
   legDurationMin?: number;
   products?: TimelineProduct[];
+  note?: string; // 貨單附註（CSV 匯入時帶進來的交代事項）
   // 有傳才顯示上下移動按鈕（送貨人員自行調整送貨順序）；已在頭尾的站別傳 undefined
   onMoveUp?: () => void;
   onMoveDown?: () => void;
@@ -503,6 +504,18 @@ export function RouteTimeline({
                         )
                       )}
                       <QtySubtotal total={n.data.products.reduce((s, p) => s + (p.qty || 0), 0)} accent={accent} />
+                    </div>
+                  )}
+                  {/* 貨單附註：出貨時交代的事項，要讓司機一眼看到，所以獨立一列反白顯示 */}
+                  {n.data.note && (
+                    <div
+                      className="mt-1.5 text-[12px] px-2 py-1 rounded"
+                      style={{ background: C.goldSoft, color: C.text, whiteSpace: "pre-wrap" }}
+                    >
+                      <span style={{ color: C.gold }} className="font-bold">
+                        貨單附註：
+                      </span>
+                      {n.data.note}
                     </div>
                   )}
                   <div style={{ fontFamily: "Manrope", color: accent }} className="text-[11px] font-bold mt-1">

@@ -136,6 +136,7 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
           phone: g.header.phone,
           orderNo: g.header.orderNo,
           weight: g.header.weight,
+          orderNote: g.header.orderNote,
           lat: coords?.lat,
           lng: coords?.lng,
           items: { create: g.items },

@@ -23,6 +23,7 @@ export interface ParsedOrderRow {
   totalQuantity?: number;
   orderNo?: string; // 出貨編號（新竹／大榮的派遣單有）
   weight?: number; // 重量（新竹／大榮的派遣單有）
+  orderNote?: string; // 貨單附註（原文照抄顯示給送貨人員）
 }
 
 const TRUE_VALUES = new Set(["是", "true", "TRUE", "1", "yes", "Y", "y", "V", "v"]);
@@ -38,6 +39,8 @@ const HEADER_ALIASES: Record<string, string[]> = {
   productName: ["產品項目", "產品", "品名", "產品名稱", "項目"],
   quantity: ["數量", "訂購數量", "數量(個)"],
   note: ["託運備註", "備註"],
+  // 貨單附註是獨立一欄，**不能**放「備註」這個別名，否則會跟上面拿來解析品項的欄位互搶
+  orderNote: ["貨單附註", "附註", "貨單備註", "出貨附註"],
   totalQuantity: ["訂貨數量之總計", "總數量", "總計數量", "數量總計"],
   orderNo: ["出貨編號之第一筆", "出貨編號", "出貨單號", "單號"],
   weight: ["重量", "總重量"],
@@ -188,6 +191,7 @@ export function parseDispatchOrderCsv(buffer: Buffer): ParsedOrderRow[] {
         totalQuantity: pickField(r, HEADER_ALIASES.totalQuantity) ? Number(pickField(r, HEADER_ALIASES.totalQuantity)) : undefined,
         orderNo: orderNo || undefined,
         weight: weight ? Number(weight) : undefined,
+        orderNote: pickField(r, HEADER_ALIASES.orderNote) || undefined,
       };
     })
     .filter((r) => r.customerName !== "");
@@ -212,11 +216,20 @@ export function groupOrderRowsByCustomer(rows: ParsedOrderRow[]) {
           phone: row.phone,
           orderNo: row.orderNo,
           weight: row.weight,
+          orderNote: row.orderNote,
         },
         items: [],
       });
     }
-    map.get(key)!.items.push(...row.items);
+    const entry = map.get(key)!;
+    entry.items.push(...row.items);
+    // 同一張派遣單分成多列時，附註可能只寫在其中一列，或每列不同；
+    // 全部保留並去重，不要因為合併而漏掉司機該看到的交代事項
+    if (row.orderNote) {
+      const existing = entry.header.orderNote;
+      if (!existing) entry.header.orderNote = row.orderNote;
+      else if (!existing.split("；").includes(row.orderNote)) entry.header.orderNote = `${existing}；${row.orderNote}`;
+    }
   }
 
   return Array.from(map.values());

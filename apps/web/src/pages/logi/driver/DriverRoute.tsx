@@ -25,6 +25,7 @@ interface Order {
   lng?: number | null;
   items: OrderItem[];
   status: string;
+  orderNote?: string | null;
   routeSequence?: number | null;
   routeOrderManual?: boolean;
 }
@@ -58,6 +59,7 @@ function HelpPanel() {
     ["順序會自動儲存", "調整後系統會重算各段距離並記住你的順序，關掉App、換手機登入都還在，不會被系統重新排掉。"],
     ["恢復系統順序", "想回到系統依優先客戶與最短路徑排的建議路線，按路線上方的「恢復系統順序」。"],
     ["出發地／目的地", "可切換公司或住家，切換後會重新計算路線。"],
+    ["貨單附註", "出貨時如果有交代事項（例如指定收貨時間、送貨方式），會以黃色標示在該客戶的貨品上方。"],
     ["檢貨", "裝車時點各項貨品標記已檢貨；整張單全部檢完會自動變成「已派送」。"],
     ["配送完成", "送達後在下方「配送完成標記」勾選該客戶，該站會從路線中移除。"],
     ["開始導航", "按最下方「開始導航」會照目前順序開啟 Google 地圖導航。"],
@@ -187,6 +189,7 @@ export default function DriverRoute() {
               isPriority: o.isPriority,
               legDistanceKm: leg.legDistanceKm,
               legDurationMin: leg.legDurationMin,
+              note: o.orderNote ?? undefined,
               products: o.items.map((i) => ({ name: i.productName, qty: i.quantity })),
             };
           }),
@@ -292,6 +295,7 @@ export default function DriverRoute() {
         const o = byId.get(s.refId);
         return {
           ...s,
+          note: o?.orderNote ?? s.note,
           products: o?.items.map((it) => ({
             name: it.productName,
             qty: it.quantity,
