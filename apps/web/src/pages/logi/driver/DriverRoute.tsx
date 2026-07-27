@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Check, LogOut, KeyRound, RotateCcw } from "lucide-react";
+import { Bell, Check, LogOut, KeyRound, RotateCcw, HelpCircle, ChevronUp, ChevronDown } from "lucide-react";
 import { api } from "../../../api/client";
 import { getAuthedStaff, isDriverOnly, clearSession } from "../../../lib/auth";
 import { C, TopBar, Pill, RouteTimeline, ActionRow, TimelineRoute, ProductSummary } from "../../../components/common";
@@ -40,6 +40,53 @@ interface Settings {
   companyAddress: string;
   companyLat?: number | null;
   companyLng?: number | null;
+}
+
+// 功能使用說明。預設收合（每天都要看的畫面，不佔版面），展開狀態記在瀏覽器裡。
+function HelpPanel() {
+  const [open, setOpen] = useState(() => localStorage.getItem("driverHelpOpen") === "1");
+
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    localStorage.setItem("driverHelpOpen", next ? "1" : "0");
+  }
+
+  const items: [string, string][] = [
+    ["調整送貨順序", "長按客戶卡片約半秒，卡片浮起來後直接拖到要的位置放開即可。只想前後移一站時，用卡片右上角的 ↑↓ 比較快。"],
+    ["順序會自動儲存", "調整後系統會重算各段距離並記住你的順序，關掉App、換手機登入都還在，不會被系統重新排掉。"],
+    ["恢復系統順序", "想回到系統依優先客戶與最短路徑排的建議路線，按路線上方的「恢復系統順序」。"],
+    ["出發地／目的地", "可切換公司或住家，切換後會重新計算路線。"],
+    ["檢貨", "裝車時點各項貨品標記已檢貨；整張單全部檢完會自動變成「已派送」。"],
+    ["配送完成", "送達後在下方「配送完成標記」勾選該客戶，該站會從路線中移除。"],
+    ["開始導航", "按最下方「開始導航」會照目前順序開啟 Google 地圖導航。"],
+  ];
+
+  return (
+    <div className="rounded-xl mb-3" style={{ background: "#fff", border: `1px solid ${C.hairline}` }}>
+      <button onClick={toggle} className="w-full flex items-center gap-1.5 px-3 py-2">
+        <HelpCircle size={14} color={C.logiAccent} />
+        <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[12px] flex-1 text-left">
+          功能使用說明
+        </span>
+        {open ? <ChevronUp size={15} color={C.muted} /> : <ChevronDown size={15} color={C.muted} />}
+      </button>
+      {open && (
+        <div className="px-3 pb-3 pt-0.5">
+          {items.map(([title, desc]) => (
+            <div key={title} className="mb-2 last:mb-0">
+              <div style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.logiAccent }} className="font-bold text-[12px]">
+                {title}
+              </div>
+              <div style={{ color: C.muted }} className="text-[12px] leading-relaxed">
+                {desc}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function DriverRoute() {
@@ -155,14 +202,8 @@ export default function DriverRoute() {
     })();
   }, [origin, destination, loading, assignedOrders.length, manualOrder]);
 
-  // 臨時調整送貨順序：把某一站往前／往後移一位，存回後端後重新計算各段距離
-  async function moveStop(refId: string, dir: -1 | 1) {
-    const current = route ? route.stops.map((s) => s.refId) : [];
-    const i = current.indexOf(refId);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= current.length) return;
-    const next = [...current];
-    [next[i], next[j]] = [next[j], next[i]];
+  // 臨時調整送貨順序：存回後端後重新計算各段距離
+  async function saveOrder(next: string[]) {
     setManualOrder(next);
     setSavingOrder(true);
     setError(null);
@@ -173,6 +214,17 @@ export default function DriverRoute() {
     } finally {
       setSavingOrder(false);
     }
+  }
+
+  // ↑↓ 微調：把某一站往前／往後移一位
+  function moveStop(refId: string, dir: -1 | 1) {
+    const current = route ? route.stops.map((s) => s.refId) : [];
+    const i = current.indexOf(refId);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= current.length) return;
+    const next = [...current];
+    [next[i], next[j]] = [next[j], next[i]];
+    void saveOrder(next);
   }
 
   // 放棄手動順序，回到系統依優先客戶＋最短路徑自動排的路線
@@ -296,6 +348,7 @@ export default function DriverRoute() {
         }
       />
       <div className="p-4">
+        <HelpPanel />
         <div style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.muted }} className="text-[12px] font-bold mb-2">
           出發地／目的地（可調整）
         </div>
@@ -341,7 +394,7 @@ export default function DriverRoute() {
             </div>
             <div className="flex items-center justify-between mb-2 gap-2">
               <div style={{ color: C.muted }} className="text-[11px]">
-                {manualOrder ? "目前是你自行調整的順序" : "用 ↑↓ 可臨時調整送貨順序"}
+                {manualOrder ? "目前是你自行調整的順序" : "長按客戶卡片可拖曳調整順序"}
                 {savingOrder && "・儲存中…"}
               </div>
               {manualOrder && (
@@ -361,6 +414,7 @@ export default function DriverRoute() {
               route={liveRoute!}
               showProducts={true}
               accent={C.logiAccent}
+              onReorder={saveOrder}
             />
           </>
         )}

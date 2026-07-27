@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Building2, Star, Navigation2, Share2, Check, ChevronUp, ChevronDown, LucideIcon } from "lucide-react";
 
 // 設計 tokens（沿用 reference/route-app-prototype.jsx）
@@ -231,16 +231,119 @@ export function RouteTimeline({
   route,
   showProducts,
   accent,
+  onReorder,
 }: {
   originLabel: string;
   destinationLabel: string;
   route: TimelineRoute;
   showProducts: boolean;
   accent: string;
+  /** 有傳才能長按拖曳排序；放開手時以新的站別順序回呼 */
+  onReorder?: (orderedRefIds: string[]) => void;
 }) {
+  const LONG_PRESS_MS = 400;
+  const [dragRefId, setDragRefId] = useState<string | null>(null);
+  // 拖曳中的暫時順序（放開手才真的送出），null＝照 route 原本的順序
+  const [previewOrder, setPreviewOrder] = useState<string[] | null>(null);
+  const cardRefs = useRef(new Map<string, HTMLDivElement>());
+  const pressTimer = useRef<number | null>(null);
+  const pressStart = useRef<{ x: number; y: number } | null>(null);
+  const orderRef = useRef<string[]>([]);
+
+  const routeIds = route.stops.map((s) => s.refId);
+  const currentIds = previewOrder ?? routeIds;
+  orderRef.current = currentIds;
+  const byId = new Map(route.stops.map((s) => [s.refId, s]));
+  const orderedStops = currentIds.map((id) => byId.get(id)).filter((s): s is TimelineStop => !!s);
+
+  // 路線重新計算完成（站別或順序變了）就丟掉拖曳中的暫時順序，改用後端算好的結果
+  useEffect(() => {
+    if (!dragRefId) setPreviewOrder(null);
+  }, [routeIds.join("|")]);
+
+  function cancelPress() {
+    if (pressTimer.current != null) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+    pressStart.current = null;
+  }
+
+  function pointOf(e: React.TouchEvent | React.MouseEvent) {
+    const t = "touches" in e ? e.touches[0] : (e as React.MouseEvent);
+    return { x: t.clientX, y: t.clientY };
+  }
+
+  function startPress(refId: string, e: React.TouchEvent | React.MouseEvent) {
+    if (!onReorder) return;
+    pressStart.current = pointOf(e);
+    pressTimer.current = window.setTimeout(() => {
+      setDragRefId(refId);
+      setPreviewOrder(orderRef.current);
+      navigator.vibrate?.(30); // 進入可拖曳狀態的觸覺回饋
+    }, LONG_PRESS_MS);
+  }
+
+  // 長按計時中就滑動＝使用者想捲動頁面，不是要拖曳
+  function maybeCancelPress(e: React.TouchEvent | React.MouseEvent) {
+    if (dragRefId || !pressStart.current) return;
+    const p = pointOf(e);
+    if (Math.abs(p.y - pressStart.current.y) > 8 || Math.abs(p.x - pressStart.current.x) > 8) cancelPress();
+  }
+
+  // 拖曳中：跟著手指移動，經過其他卡片的中線就即時換位；放開手才回呼儲存
+  useEffect(() => {
+    if (!dragRefId) return;
+
+    function moveTo(y: number) {
+      const ids = orderRef.current;
+      const from = ids.indexOf(dragRefId!);
+      if (from < 0) return;
+      let to = ids.length - 1;
+      for (let i = 0; i < ids.length; i++) {
+        const el = cardRefs.current.get(ids[i]);
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        if (y < r.top + r.height / 2) {
+          to = i;
+          break;
+        }
+      }
+      if (to === from) return;
+      const next = [...ids];
+      next.splice(to, 0, next.splice(from, 1)[0]);
+      setPreviewOrder(next);
+    }
+
+    const onMove = (ev: TouchEvent | MouseEvent) => {
+      ev.preventDefault(); // 拖曳時不要跟著捲動頁面
+      const y = "touches" in ev ? ev.touches[0]?.clientY : (ev as MouseEvent).clientY;
+      if (y != null) moveTo(y);
+    };
+    const onEnd = () => {
+      const ids = orderRef.current;
+      setDragRefId(null);
+      if (ids.join("|") !== routeIds.join("|")) onReorder?.(ids);
+      else setPreviewOrder(null);
+    };
+
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", onEnd);
+    window.addEventListener("touchcancel", onEnd);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onEnd);
+    return () => {
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onEnd);
+      window.removeEventListener("touchcancel", onEnd);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onEnd);
+    };
+  }, [dragRefId, routeIds.join("|")]);
+
   const nodes = [
     { kind: "origin" as const, label: originLabel },
-    ...route.stops.map((s) => ({ kind: "stop" as const, data: s })),
+    ...orderedStops.map((s) => ({ kind: "stop" as const, data: s })),
     { kind: "destination" as const, label: destinationLabel, leg: route.finalLegDistanceKm, legDuration: route.finalLegDurationMin },
   ];
 
@@ -269,7 +372,28 @@ export function RouteTimeline({
                 <span style={{ color: accent, fontFamily: "Manrope", fontWeight: 800, fontSize: 10 }}>{i}</span>
               )}
             </div>
-            <div className="rounded-xl px-3 py-2.5" style={{ background: isEnd ? C.bg : C.surface, border: `1px solid ${C.hairline}` }}>
+            <div
+              ref={(el) => {
+                if (n.kind === "stop" && el) cardRefs.current.set(n.data.refId, el);
+              }}
+              onTouchStart={n.kind === "stop" ? (e) => startPress(n.data.refId, e) : undefined}
+              onTouchMove={n.kind === "stop" ? maybeCancelPress : undefined}
+              onTouchEnd={n.kind === "stop" ? cancelPress : undefined}
+              onMouseDown={n.kind === "stop" ? (e) => startPress(n.data.refId, e) : undefined}
+              onMouseMove={n.kind === "stop" ? maybeCancelPress : undefined}
+              onMouseUp={n.kind === "stop" ? cancelPress : undefined}
+              className="rounded-xl px-3 py-2.5 transition-shadow"
+              style={{
+                background: isEnd ? C.bg : C.surface,
+                border: `1px solid ${n.kind === "stop" && n.data.refId === dragRefId ? accent : C.hairline}`,
+                // 拖曳中的卡片浮起來，讓使用者知道現在移動的是哪一站
+                boxShadow: n.kind === "stop" && n.data.refId === dragRefId ? "0 10px 24px rgba(0,0,0,0.18)" : undefined,
+                transform: n.kind === "stop" && n.data.refId === dragRefId ? "scale(1.02)" : undefined,
+                // 長按拖曳期間不要跳出系統的文字選取／複製選單
+                userSelect: dragRefId ? "none" : undefined,
+                WebkitUserSelect: dragRefId ? "none" : undefined,
+              }}
+            >
               {n.kind === "stop" ? (
                 <>
                   <div className="flex items-center justify-between gap-2">
@@ -296,6 +420,9 @@ export function RouteTimeline({
                           <button
                             key={pi}
                             onClick={p.onToggle}
+                            // 檢貨按鈕自己處理，不要被長按判定成要拖曳整張卡片
+                            onTouchStart={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
                             style={{ background: p.checked ? C.success : C.dangerSoft, color: p.checked ? "#fff" : C.danger }}
                             className="flex items-center gap-1.5 text-[13px] font-bold px-2 py-1 rounded-lg"
                           >
@@ -352,6 +479,8 @@ function MoveButton({ dir, accent, onClick }: { dir: "up" | "down"; accent: stri
     <button
       onClick={onClick}
       disabled={!onClick}
+      onTouchStart={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
       aria-label={dir === "up" ? "往前一站" : "往後一站"}
       style={{ border: `1px solid ${onClick ? accent : C.hairline}`, color: onClick ? accent : C.hairline }}
       className="flex items-center justify-center rounded-lg w-7 h-7 disabled:opacity-60"
