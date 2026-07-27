@@ -192,10 +192,14 @@ export const api = {
     const fd = new FormData();
     fd.append("file", file);
     if (carrier) fd.append("carrier", carrier);
-    return uploadFile<{ createdCount: number; orderIds: string[]; purged: number; errors: string[]; detectedHeaders: string[] }>(
-      "/orders/import",
-      fd
-    );
+    return uploadFile<{
+      createdCount: number;
+      orderIds: string[];
+      purged: number;
+      noteCount: number;
+      errors: string[];
+      detectedHeaders: string[];
+    }>("/orders/import", fd);
   },
   getNotifications: () =>
     request<{ id: string; orderId: string; message: string; isRead: boolean; createdAt: string }[]>("/notifications"),

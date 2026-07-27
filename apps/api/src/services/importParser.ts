@@ -158,15 +158,25 @@ export function getCsvHeaders(buffer: Buffer): string[] {
  *  若無此欄位則退回舊格式（每列一個「產品項目」+「數量」）。 */
 export function parseDispatchOrderCsv(buffer: Buffer): ParsedOrderRow[] {
   const text = decodeCsvBuffer(buffer);
-  const records = parseCsv(text, {
-    columns: true,
-    skip_empty_lines: true,
-    trim: true,
-    relax_column_count: true,
-  }) as Record<string, unknown>[];
+  const parseOptions = { skip_empty_lines: true, trim: true, relax_column_count: true };
+  const records = parseCsv(text, { ...parseOptions, columns: true }) as Record<string, unknown>[];
+
+  // 實際的出貨派遣單匯出檔，資料列會比標題列多一個「沒有標題的空欄」，
+  // 導致「貨單附註」的內容其實落在最後一欄、被 columns 模式丟掉。
+  // 這裡另外用陣列模式再解析一次，把多出來的尾端欄位撿回來當附註。
+  const rawRows = parseCsv(text, { ...parseOptions, columns: false }) as string[][];
+  const headerLen = rawRows[0]?.length ?? 0;
+  const extraNoteOf = (rowIndex: number): string => {
+    const extras = (rawRows[rowIndex + 1] ?? []).slice(headerLen);
+    for (let i = extras.length - 1; i >= 0; i--) {
+      const v = (extras[i] ?? "").trim();
+      if (v) return v;
+    }
+    return "";
+  };
 
   return records
-    .map((r) => {
+    .map((r, rowIndex) => {
       const note = pickField(r, HEADER_ALIASES.note);
       const legacyProductName = pickField(r, HEADER_ALIASES.productName);
       const items = note
@@ -191,7 +201,7 @@ export function parseDispatchOrderCsv(buffer: Buffer): ParsedOrderRow[] {
         totalQuantity: pickField(r, HEADER_ALIASES.totalQuantity) ? Number(pickField(r, HEADER_ALIASES.totalQuantity)) : undefined,
         orderNo: orderNo || undefined,
         weight: weight ? Number(weight) : undefined,
-        orderNote: pickField(r, HEADER_ALIASES.orderNote) || undefined,
+        orderNote: pickField(r, HEADER_ALIASES.orderNote) || extraNoteOf(rowIndex) || undefined,
       };
     })
     .filter((r) => r.customerName !== "");

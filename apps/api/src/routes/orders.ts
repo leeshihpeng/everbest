@@ -169,7 +169,15 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
       }
     }
 
-    res.json({ createdCount: created.length, orderIds: created, purged, errors, detectedHeaders: getCsvHeaders(req.file.buffer) });
+    res.json({
+      createdCount: created.length,
+      orderIds: created,
+      purged,
+      // 讓內勤一眼看出附註有沒有真的帶進來（曾發生匯出檔欄位錯位而整批沒帶到）
+      noteCount: grouped.filter((g) => g.header.orderNote).length,
+      errors,
+      detectedHeaders: getCsvHeaders(req.file.buffer),
+    });
   } catch (err) {
     next(err);
   }

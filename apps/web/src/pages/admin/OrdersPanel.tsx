@@ -45,6 +45,7 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
   const [importResult, setImportResult] = useState<{
     createdCount: number;
     purged: number;
+    noteCount: number;
     errors: string[];
     detectedHeaders: string[];
   } | null>(null);
@@ -183,6 +184,8 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
           <div className="text-[12px] mt-2" style={{ color: C.muted }}>
             新增 {importResult.createdCount} 筆派遣單
             {importResult.purged > 0 && `・已清除非今日上傳的舊派遣單 ${importResult.purged} 筆`}
+            ・帶入貨單附註 {importResult.noteCount} 筆
+            <div className="mt-0.5">偵測到的 CSV 欄位：{importResult.detectedHeaders.join("、")}</div>
             {importResult.errors.length > 0 && (
               <div style={{ color: C.danger }} className="mt-1">
                 {importResult.errors.length} 筆未匯入：{importResult.errors.join("；")}
