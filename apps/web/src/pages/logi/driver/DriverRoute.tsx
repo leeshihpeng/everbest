@@ -53,7 +53,7 @@ function HelpPanel() {
   }
 
   const items: [string, string][] = [
-    ["調整送貨順序", "長按客戶卡片約半秒，卡片浮起來後直接拖到要的位置放開即可。只想前後移一站時，用卡片右上角的 ↑↓ 比較快。"],
+    ["調整送貨順序", "按住客戶卡片右上角的把手（⠿）直接往上下拖，拖到要的位置放開即可；拖到畫面上下邊緣會自動捲動。也可以長按卡片任一處進入拖曳，或用 ↑↓ 一次移動一站。"],
     ["順序會自動儲存", "調整後系統會重算各段距離並記住你的順序，關掉App、換手機登入都還在，不會被系統重新排掉。"],
     ["恢復系統順序", "想回到系統依優先客戶與最短路徑排的建議路線，按路線上方的「恢復系統順序」。"],
     ["出發地／目的地", "可切換公司或住家，切換後會重新計算路線。"],
@@ -394,7 +394,7 @@ export default function DriverRoute() {
             </div>
             <div className="flex items-center justify-between mb-2 gap-2">
               <div style={{ color: C.muted }} className="text-[11px]">
-                {manualOrder ? "目前是你自行調整的順序" : "長按客戶卡片可拖曳調整順序"}
+                {manualOrder ? "目前是你自行調整的順序" : "按住右上角把手 ⠿ 可拖曳調整順序"}
                 {savingOrder && "・儲存中…"}
               </div>
               {manualOrder && (

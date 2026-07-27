@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Building2, Star, Navigation2, Share2, Check, ChevronUp, ChevronDown, LucideIcon } from "lucide-react";
+import { ArrowLeft, Building2, Star, Navigation2, Share2, Check, ChevronUp, ChevronDown, GripVertical, LucideIcon } from "lucide-react";
 
 // 設計 tokens（沿用 reference/route-app-prototype.jsx）
 export const C = {
@@ -241,7 +241,9 @@ export function RouteTimeline({
   /** 有傳才能長按拖曳排序；放開手時以新的站別順序回呼 */
   onReorder?: (orderedRefIds: string[]) => void;
 }) {
-  const LONG_PRESS_MS = 400;
+  const LONG_PRESS_MS = 300;
+  // 手指按著本來就會晃幾 px，容忍值太小會讓長按幾乎永遠觸發不了
+  const MOVE_TOLERANCE_PX = 18;
   const [dragRefId, setDragRefId] = useState<string | null>(null);
   // 拖曳中的暫時順序（放開手才真的送出），null＝照 route 原本的順序
   const [previewOrder, setPreviewOrder] = useState<string[] | null>(null);
@@ -249,6 +251,7 @@ export function RouteTimeline({
   const pressTimer = useRef<number | null>(null);
   const pressStart = useRef<{ x: number; y: number } | null>(null);
   const orderRef = useRef<string[]>([]);
+  const dragYRef = useRef(0);
 
   const routeIds = route.stops.map((s) => s.refId);
   const currentIds = previewOrder ?? routeIds;
@@ -274,21 +277,35 @@ export function RouteTimeline({
     return { x: t.clientX, y: t.clientY };
   }
 
-  function startPress(refId: string, e: React.TouchEvent | React.MouseEvent) {
-    if (!onReorder) return;
-    pressStart.current = pointOf(e);
-    pressTimer.current = window.setTimeout(() => {
-      setDragRefId(refId);
-      setPreviewOrder(orderRef.current);
-      navigator.vibrate?.(30); // 進入可拖曳狀態的觸覺回饋
-    }, LONG_PRESS_MS);
+  function beginDrag(refId: string, y: number) {
+    dragYRef.current = y;
+    setDragRefId(refId);
+    setPreviewOrder(orderRef.current);
+    navigator.vibrate?.(30); // 進入可拖曳狀態的觸覺回饋
   }
 
-  // 長按計時中就滑動＝使用者想捲動頁面，不是要拖曳
+  function startPress(refId: string, e: React.TouchEvent | React.MouseEvent) {
+    if (!onReorder) return;
+    const p = pointOf(e);
+    pressStart.current = p;
+    pressTimer.current = window.setTimeout(() => beginDrag(refId, p.y), LONG_PRESS_MS);
+  }
+
+  // 長按計時中就大幅滑動＝使用者想捲動頁面，不是要拖曳
   function maybeCancelPress(e: React.TouchEvent | React.MouseEvent) {
     if (dragRefId || !pressStart.current) return;
     const p = pointOf(e);
-    if (Math.abs(p.y - pressStart.current.y) > 8 || Math.abs(p.x - pressStart.current.x) > 8) cancelPress();
+    if (Math.abs(p.y - pressStart.current.y) > MOVE_TOLERANCE_PX || Math.abs(p.x - pressStart.current.x) > MOVE_TOLERANCE_PX) {
+      cancelPress();
+    }
+  }
+
+  // 拖曳握把：按住就直接進入拖曳，不必等長按，也不會跟頁面捲動搶手勢
+  function handleGripStart(refId: string, e: React.TouchEvent | React.MouseEvent) {
+    if (!onReorder) return;
+    e.stopPropagation();
+    cancelPress();
+    beginDrag(refId, pointOf(e).y);
   }
 
   // 拖曳中：跟著手指移動，經過其他卡片的中線就即時換位；放開手才回呼儲存
@@ -318,7 +335,11 @@ export function RouteTimeline({
     const onMove = (ev: TouchEvent | MouseEvent) => {
       ev.preventDefault(); // 拖曳時不要跟著捲動頁面
       const y = "touches" in ev ? ev.touches[0]?.clientY : (ev as MouseEvent).clientY;
-      if (y != null) moveTo(y);
+      if (y == null) return;
+      dragYRef.current = y;
+      // 換位直接在這裡做：requestAnimationFrame 在畫面被凍結時不會執行，
+      // 不能把換位的責任交給它，否則拖曳會整個沒反應
+      moveTo(y);
     };
     const onEnd = () => {
       const ids = orderRef.current;
@@ -326,18 +347,36 @@ export function RouteTimeline({
       if (ids.join("|") !== routeIds.join("|")) onReorder?.(ids);
       else setPreviewOrder(null);
     };
+    // Android 長按會跳出系統選單，會把拖曳打斷
+    const onContextMenu = (ev: Event) => ev.preventDefault();
+
+    // 站別多到超過一個螢幕時，手指停在上下邊緣要自動捲動，才有辦法把第一站拖到看不見的最後面。
+    // 用計時器而非 requestAnimationFrame：畫面凍結時 rAF 不會執行，計時器比較不會整個停擺。
+    const EDGE_PX = 90;
+    const SCROLL_STEP = 12;
+    const autoScroll = window.setInterval(() => {
+      const y = dragYRef.current;
+      const before = window.scrollY;
+      if (y < EDGE_PX) window.scrollBy(0, -SCROLL_STEP);
+      else if (y > window.innerHeight - EDGE_PX) window.scrollBy(0, SCROLL_STEP);
+      // 頁面捲動後各卡片位置改變，要用同一個手指位置重新判斷插入點
+      if (window.scrollY !== before) moveTo(y);
+    }, 16);
 
     window.addEventListener("touchmove", onMove, { passive: false });
     window.addEventListener("touchend", onEnd);
     window.addEventListener("touchcancel", onEnd);
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onEnd);
+    window.addEventListener("contextmenu", onContextMenu);
     return () => {
+      clearInterval(autoScroll);
       window.removeEventListener("touchmove", onMove);
       window.removeEventListener("touchend", onEnd);
       window.removeEventListener("touchcancel", onEnd);
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onEnd);
+      window.removeEventListener("contextmenu", onContextMenu);
     };
   }, [dragRefId, routeIds.join("|")]);
 
@@ -389,9 +428,10 @@ export function RouteTimeline({
                 // 拖曳中的卡片浮起來，讓使用者知道現在移動的是哪一站
                 boxShadow: n.kind === "stop" && n.data.refId === dragRefId ? "0 10px 24px rgba(0,0,0,0.18)" : undefined,
                 transform: n.kind === "stop" && n.data.refId === dragRefId ? "scale(1.02)" : undefined,
-                // 長按拖曳期間不要跳出系統的文字選取／複製選單
-                userSelect: dragRefId ? "none" : undefined,
-                WebkitUserSelect: dragRefId ? "none" : undefined,
+                // 長按時 iOS 會跳出選字放大鏡／複製選單並搶走手勢，可拖曳的卡片一律關掉
+                userSelect: onReorder && n.kind === "stop" ? "none" : undefined,
+                WebkitUserSelect: onReorder && n.kind === "stop" ? "none" : undefined,
+                WebkitTouchCallout: onReorder && n.kind === "stop" ? "none" : undefined,
               }}
             >
               {n.kind === "stop" ? (
@@ -406,6 +446,25 @@ export function RouteTimeline({
                         <div className="flex items-center gap-1">
                           <MoveButton dir="up" accent={accent} onClick={n.data.onMoveUp} />
                           <MoveButton dir="down" accent={accent} onClick={n.data.onMoveDown} />
+                        </div>
+                      )}
+                      {onReorder && (
+                        <div
+                          role="button"
+                          aria-label="拖曳排序"
+                          onTouchStart={(e) => handleGripStart(n.data.refId, e)}
+                          onMouseDown={(e) => handleGripStart(n.data.refId, e)}
+                          className="flex items-center justify-center rounded-lg"
+                          // touchAction: none＝這個握把不會被瀏覽器當成捲動手勢，按住就能直接拖
+                          style={{
+                            width: 30,
+                            height: 28,
+                            touchAction: "none",
+                            border: `1px solid ${C.hairline}`,
+                            background: n.data.refId === dragRefId ? accent : "#fff",
+                          }}
+                        >
+                          <GripVertical size={16} color={n.data.refId === dragRefId ? "#fff" : C.muted} />
                         </div>
                       )}
                     </div>
