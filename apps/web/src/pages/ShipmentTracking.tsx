@@ -23,6 +23,7 @@ export default function ShipmentTracking() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selected, setSelected] = useState<Folder | null>(null);
   const [rows, setRows] = useState<ShipmentRow[]>([]);
+  const [dateFilter, setDateFilter] = useState<string>("all"); // "all" 或 "YYYY/MM/DD"
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -45,7 +46,10 @@ export default function ShipmentTracking() {
     setLoading(true);
     setError(null);
     try {
-      setRows(await api.getShipments(f.carrier, f.region));
+      const data = await api.getShipments(f.carrier, f.region);
+      setRows(data);
+      // 保留兩週的資料，預設只顯示最新一天的報表，其他配送日期用上方的日期列切換
+      setDateFilter(data.length > 0 ? fmtDate(data[0].shipDate) : "all");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -108,6 +112,9 @@ export default function ShipmentTracking() {
   }
 
   const isHsinchu = selected?.carrier === "新竹貨運";
+  // 資料依配送日期由新到舊排序，Set 會保留這個順序
+  const dates = [...new Set(rows.map((r) => fmtDate(r.shipDate)))];
+  const shown = dateFilter === "all" ? rows : rows.filter((r) => fmtDate(r.shipDate) === dateFilter);
 
   return (
     <div>
@@ -192,19 +199,52 @@ export default function ShipmentTracking() {
           </div>
         ) : (
           <>
+            {/* 配送日期切換：預設最新一天，可回看兩週內的其他報表 */}
+            <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+              <span style={{ color: C.muted }} className="text-[11px] shrink-0">
+                配送日期
+              </span>
+              {dates.map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setDateFilter(d)}
+                  style={
+                    dateFilter === d
+                      ? { background: C.navy, color: "#fff" }
+                      : { background: "#fff", border: `1px solid ${C.hairline}`, color: C.text }
+                  }
+                  className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                >
+                  {d.slice(5)}
+                </button>
+              ))}
+              {dates.length > 1 && (
+                <button
+                  onClick={() => setDateFilter("all")}
+                  style={
+                    dateFilter === "all"
+                      ? { background: C.navy, color: "#fff" }
+                      : { background: "#fff", border: `1px solid ${C.hairline}`, color: C.text }
+                  }
+                  className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                >
+                  全部
+                </button>
+              )}
+            </div>
             <div className="flex items-center justify-between mb-2">
               <span style={{ color: C.muted }} className="text-[12px]">
-                共 {rows.length} 筆・{rows.reduce((s, r) => s + r.pieces, 0)} 件・
-                {rows.reduce((s, r) => s + r.weight, 0)} 公斤
+                {dateFilter === "all" ? "全部" : dateFilter}・共 {shown.length} 筆・{shown.reduce((s, r) => s + r.pieces, 0)} 件・
+                {shown.reduce((s, r) => s + r.weight, 0)} 公斤
               </span>
               <span style={{ color: C.muted }} className="text-[11px]">
                 保留兩週內報表
               </span>
             </div>
-            {rows.map((r, i) => {
+            {shown.map((r, i) => {
               const date = fmtDate(r.shipDate);
-              const newDay = i === 0 || fmtDate(rows[i - 1].shipDate) !== date;
-              const dayRows = newDay ? rows.filter((x) => fmtDate(x.shipDate) === date) : [];
+              const newDay = dateFilter === "all" && (i === 0 || fmtDate(shown[i - 1].shipDate) !== date);
+              const dayRows = newDay ? shown.filter((x) => fmtDate(x.shipDate) === date) : [];
               return (
               <div key={r.id}>
                 {newDay && (

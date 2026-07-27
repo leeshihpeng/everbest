@@ -195,6 +195,8 @@ export const api = {
   getReportYears: () => request<{ year: number; count: number }[]>("/reports/years"),
   createReportYear: (year: number) =>
     request<{ year: number; count: number }>("/reports/years", { method: "POST", body: JSON.stringify({ year }) }),
+  deleteReportYear: (year: number) =>
+    request<{ year: number; deleted: number }>(`/reports/years/${year}`, { method: "DELETE" }),
   importReports: (files: File[], opts: { year?: number; reportDate?: string } = {}) => {
     const fd = new FormData();
     for (const f of files) fd.append("files", f);

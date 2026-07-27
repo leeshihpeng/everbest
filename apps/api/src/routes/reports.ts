@@ -61,6 +61,19 @@ reportsRouter.post("/years", requireRole("ADMIN"), async (req, res, next) => {
   }
 });
 
+// 刪除整個年份（目錄與該年所有報告）— 僅最高權限者（ADMIN）
+reportsRouter.delete("/years/:year", requireRole("ADMIN"), async (req, res, next) => {
+  try {
+    const year = Number(req.params.year);
+    if (!Number.isInteger(year)) return res.status(400).json({ error: "年份格式不正確" });
+    const removed = await prisma.inspectionReport.deleteMany({ where: { year } });
+    await prisma.reportYear.deleteMany({ where: { year } });
+    res.json({ year, deleted: removed.count });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // 匯入檢驗報告 PDF — 僅最高權限者（ADMIN）。
 // 年份優先採指定的 year，否則依 PDF 內讀到的報告日期自動分類；
 // 掃描檔讀不到日期且未指定年份時，該檔會列在 errors 請使用者指定。

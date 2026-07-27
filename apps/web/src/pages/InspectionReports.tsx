@@ -66,6 +66,29 @@ export default function InspectionReports() {
     loadYears();
   }
 
+  // 刪除整個年份（含該年所有報告）。真實報告一去不復返，所以要求輸入年份確認。
+  async function handleDeleteYear() {
+    if (selectedYear == null) return;
+    const count = reports.length;
+    const typed = prompt(
+      `即將刪除 ${selectedYear} 年的整個目錄${count > 0 ? `（含 ${count} 份報告）` : ""}，此動作無法復原。\n請輸入「${selectedYear}」確認刪除：`
+    );
+    if (typed === null) return;
+    if (typed.trim() !== String(selectedYear)) {
+      setError("輸入的年份不符，未刪除。");
+      return;
+    }
+    setError(null);
+    try {
+      const r = await api.deleteReportYear(selectedYear);
+      setImportMsg(null);
+      backToYears();
+      alert(`已刪除 ${r.year} 年目錄${r.deleted > 0 ? `與 ${r.deleted} 份報告` : ""}。`);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   async function handleAddYear() {
     const input = prompt("請輸入要新增的年份（西元年，例如 2027）");
     if (!input) return;
@@ -200,9 +223,13 @@ export default function InspectionReports() {
               <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[13px]">
                 {selectedYear ? `匯入報告到 ${selectedYear} 年` : "匯入檢驗報告（依報告日期自動分類年份）"}
               </div>
-              {!selectedYear && (
+              {!selectedYear ? (
                 <button onClick={handleAddYear} style={{ color: C.bizAccent }} className="flex items-center gap-1 text-[12px] font-bold">
                   <FolderPlus size={14} /> 新增年份
+                </button>
+              ) : (
+                <button onClick={handleDeleteYear} style={{ color: C.danger }} className="flex items-center gap-1 text-[12px] font-bold">
+                  <Trash2 size={14} /> 刪除整個年份
                 </button>
               )}
             </div>
