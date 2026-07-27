@@ -7,6 +7,7 @@ import { C, TopBar, PriorityTag, OriginCard, RouteTimeline, ActionRow, TimelineR
 import { RouteMap } from "../../components/RouteMap";
 import { buildNavigationUrl } from "../../lib/googleMapsLoader";
 import { cityOrderIndex } from "../../lib/taiwanCities";
+import { formatRouteShareText, shareRouteText } from "../../lib/routeShare";
 
 interface Customer {
   id: string;
@@ -137,6 +138,19 @@ export default function BizSetup() {
       : { lat: self?.homeLat, lng: self?.homeLng };
   const originLabel = origin === "company" ? "公司" : "住家";
   const destLabel = destination === "company" ? "公司" : "住家";
+
+  // 分享拜訪路線：跟檢驗報告的分享一樣交給系統分享清單（可選 LINE 群組）
+  async function handleShareRoute() {
+    if (!route) return;
+    const text = formatRouteShareText({
+      title: `${self?.name ?? ""} 的拜訪路線`,
+      originLabel,
+      destinationLabel: destLabel,
+      route,
+    });
+    const notice = await shareRouteText("拜訪路線", text);
+    setRouteError(notice);
+  }
 
   async function handleGenerateRoute() {
     setStep("route");
@@ -460,6 +474,7 @@ export default function BizSetup() {
 
             <ActionRow
               accent={C.bizAccent}
+              onShare={handleShareRoute}
               onNavigate={() => {
                 if (originPoint.lat == null || originPoint.lng == null || destPoint.lat == null || destPoint.lng == null) return;
                 const url = buildNavigationUrl(

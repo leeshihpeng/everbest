@@ -5,6 +5,7 @@ import { api } from "../../../api/client";
 import { getAuthedStaff, isDriverOnly, clearSession } from "../../../lib/auth";
 import { C, TopBar, Pill, RouteTimeline, ActionRow, TimelineRoute, ProductSummary } from "../../../components/common";
 import { buildNavigationUrl } from "../../../lib/googleMapsLoader";
+import { formatRouteShareText, shareRouteText } from "../../../lib/routeShare";
 
 interface OrderItem {
   id: string;
@@ -214,6 +215,19 @@ export default function DriverRoute() {
     } finally {
       setSavingOrder(false);
     }
+  }
+
+  // 分享今日路線：跟檢驗報告的分享一樣交給系統分享清單（可選 LINE 群組）
+  async function handleShareRoute() {
+    if (!liveRoute) return;
+    const text = formatRouteShareText({
+      title: `${me?.name ?? ""} 的今日配送路線`,
+      originLabel: origin === "company" ? "公司" : "住家",
+      destinationLabel: destination === "company" ? "公司" : "住家",
+      route: liveRoute,
+    });
+    const notice = await shareRouteText("今日配送路線", text);
+    setError(notice);
   }
 
   // ↑↓ 微調：把某一站往前／往後移一位
@@ -455,6 +469,7 @@ export default function DriverRoute() {
         {route && (
           <ActionRow
             accent={C.logiAccent}
+            onShare={handleShareRoute}
             onNavigate={() => {
               if (originPoint.lat == null || originPoint.lng == null || destPoint.lat == null || destPoint.lng == null) return;
               const url = buildNavigationUrl(
