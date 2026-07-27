@@ -280,6 +280,34 @@ async function assertCanModifyOrder(req: AuthedRequest, orderId: string): Promis
   return { ok: false, status: 403, error: "只能操作指派給你的派遣單" };
 }
 
+// 送貨人員臨時調整送貨順序（路線已送出後仍可改）。
+// 一定要放在 PUT /:id 之前，否則會被當成 id 為 "route-order" 的派遣單。
+// manual=false 代表還原成系統自動排序，之後每次開啟都會重新計算最佳路線。
+ordersRouter.put("/route-order", async (req: AuthedRequest, res, next) => {
+  try {
+    const { orderIds, manual = true } = req.body as { orderIds: unknown; manual?: boolean };
+    if (!Array.isArray(orderIds) || orderIds.length === 0 || orderIds.some((id) => typeof id !== "string")) {
+      return res.status(400).json({ error: "請提供要排序的派遣單" });
+    }
+
+    // 逐筆確認擁有權：送貨人員只能排自己的單，不能動到別人的路線
+    for (const id of orderIds as string[]) {
+      const check = await assertCanModifyOrder(req, id);
+      if (!check.ok) return res.status(check.status).json({ error: check.error });
+    }
+
+    await Promise.all(
+      (orderIds as string[]).map((id, idx) =>
+        prisma.dispatchOrder.update({ where: { id }, data: { routeSequence: idx, routeOrderManual: manual } })
+      )
+    );
+
+    res.json({ updated: orderIds.length, manual });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // 更新派遣單狀態（例如送貨人員標記完成）
 ordersRouter.patch("/:id/status", async (req: AuthedRequest, res, next) => {
   try {

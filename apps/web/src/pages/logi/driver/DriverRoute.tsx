@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Check, LogOut, KeyRound } from "lucide-react";
+import { Bell, Check, LogOut, KeyRound, RotateCcw } from "lucide-react";
 import { api } from "../../../api/client";
 import { getAuthedStaff, isDriverOnly, clearSession } from "../../../lib/auth";
 import { C, TopBar, Pill, RouteTimeline, ActionRow, TimelineRoute, ProductSummary } from "../../../components/common";
@@ -24,6 +24,8 @@ interface Order {
   lng?: number | null;
   items: OrderItem[];
   status: string;
+  routeSequence?: number | null;
+  routeOrderManual?: boolean;
 }
 
 interface Staff {
@@ -59,6 +61,9 @@ export default function DriverRoute() {
   const [routeStops, setRouteStops] = useState<Order[]>([]); // 已排序好的停靠站，供「開始導航」使用
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
+  // 送貨人員自行調整過順序 → 照自己排的走，不再自動重新排序
+  const [manualOrder, setManualOrder] = useState<string[] | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   useEffect(() => {
     if (!me) {
@@ -68,9 +73,14 @@ export default function DriverRoute() {
     (async () => {
       try {
         const [orderList, staffList, s] = await Promise.all([api.getOrders({}), api.getStaff(), api.getSettings()]);
-        setOrders(
-          orderList.filter((o: Order) => o.assignedDriverId === me.id && (o.status === "SELECTED" || o.status === "DISPATCHED"))
+        const mine: Order[] = orderList.filter(
+          (o: Order) => o.assignedDriverId === me.id && (o.status === "SELECTED" || o.status === "DISPATCHED")
         );
+        setOrders(mine);
+        // 之前調整過順序就沿用（換手機、重新整理都還在）。orderList 已依 routeSequence 排序。
+        if (mine.some((o) => o.routeOrderManual)) {
+          setManualOrder(mine.filter((o) => o.lat != null && o.lng != null).map((o) => o.id));
+        }
         setSelf(staffList.find((st: Staff) => st.id === me.id) ?? null);
         setSettings(s);
       } catch (err) {
@@ -96,7 +106,14 @@ export default function DriverRoute() {
       setRouteLoading(true);
       setRouteError(null);
       try {
-        const stops = assignedOrders.filter((o) => o.lat != null && o.lng != null);
+        const routable = assignedOrders.filter((o) => o.lat != null && o.lng != null);
+        // 自行調整過順序就照著走；已完成或新加入的單子分別剔除／補在最後
+        const stops = manualOrder
+          ? [
+              ...manualOrder.map((id) => routable.find((o) => o.id === id)).filter((o): o is Order => !!o),
+              ...routable.filter((o) => !manualOrder.includes(o.id)),
+            ]
+          : routable;
         if (stops.length === 0) {
           setRoute(null);
           return;
@@ -108,6 +125,7 @@ export default function DriverRoute() {
           origin: { lat: originPoint.lat, lng: originPoint.lng },
           destination: { lat: destPoint.lat, lng: destPoint.lng },
           stops: stops.map((o) => ({ refId: o.id, lat: o.lat, lng: o.lng, isPriority: o.isPriority })),
+          keepOrder: !!manualOrder,
         });
         const byId = new Map(stops.map((o) => [o.id, o]));
         setRouteStops(result.orderedStopRefIds.map((id) => byId.get(id)!));
@@ -135,7 +153,43 @@ export default function DriverRoute() {
         setRouteLoading(false);
       }
     })();
-  }, [origin, destination, loading, assignedOrders.length]);
+  }, [origin, destination, loading, assignedOrders.length, manualOrder]);
+
+  // 臨時調整送貨順序：把某一站往前／往後移一位，存回後端後重新計算各段距離
+  async function moveStop(refId: string, dir: -1 | 1) {
+    const current = route ? route.stops.map((s) => s.refId) : [];
+    const i = current.indexOf(refId);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= current.length) return;
+    const next = [...current];
+    [next[i], next[j]] = [next[j], next[i]];
+    setManualOrder(next);
+    setSavingOrder(true);
+    setError(null);
+    try {
+      await api.updateRouteOrder(next);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSavingOrder(false);
+    }
+  }
+
+  // 放棄手動順序，回到系統依優先客戶＋最短路徑自動排的路線
+  async function resetOrder() {
+    const ids = route ? route.stops.map((s) => s.refId) : [];
+    setManualOrder(null);
+    if (ids.length === 0) return;
+    setSavingOrder(true);
+    setError(null);
+    try {
+      await api.updateRouteOrder(ids, false);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSavingOrder(false);
+    }
+  }
 
   async function toggleItemChecked(orderId: string, itemId: string) {
     const order = orders.find((o) => o.id === orderId);
@@ -168,16 +222,19 @@ export default function DriverRoute() {
     const byId = new Map(orders.map((o) => [o.id, o]));
     return {
       ...route,
-      stops: route.stops.map((s) => {
+      stops: route.stops.map((s, i) => {
         const o = byId.get(s.refId);
         return {
           ...s,
-          products: o?.items.map((i) => ({
-            name: i.productName,
-            qty: i.quantity,
-            checked: i.checked,
-            onToggle: () => toggleItemChecked(o.id, i.id),
+          products: o?.items.map((it) => ({
+            name: it.productName,
+            qty: it.quantity,
+            checked: it.checked,
+            onToggle: () => toggleItemChecked(o.id, it.id),
           })),
+          // 頭尾各少一個方向，避免按了沒反應
+          onMoveUp: i > 0 ? () => moveStop(s.refId, -1) : undefined,
+          onMoveDown: i < route.stops.length - 1 ? () => moveStop(s.refId, 1) : undefined,
         };
       }),
     };
@@ -281,6 +338,22 @@ export default function DriverRoute() {
               <div style={{ fontFamily: "Manrope", color: C.logiAccent }} className="text-[18px] font-extrabold">
                 {route.totalDistanceKm.toFixed(1)} km
               </div>
+            </div>
+            <div className="flex items-center justify-between mb-2 gap-2">
+              <div style={{ color: C.muted }} className="text-[11px]">
+                {manualOrder ? "目前是你自行調整的順序" : "用 ↑↓ 可臨時調整送貨順序"}
+                {savingOrder && "・儲存中…"}
+              </div>
+              {manualOrder && (
+                <button
+                  onClick={resetOrder}
+                  disabled={savingOrder}
+                  style={{ border: `1px solid ${C.logiAccent}`, color: C.logiAccent }}
+                  className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg disabled:opacity-60 shrink-0"
+                >
+                  <RotateCcw size={12} /> 恢復系統順序
+                </button>
+              )}
             </div>
             <RouteTimeline
               originLabel={origin === "company" ? "公司" : "住家"}

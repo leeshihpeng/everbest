@@ -76,6 +76,9 @@ export interface RouteOptimizeRequest {
     lng: number;
     isPriority: boolean;
   }[];
+  /** true＝完全照 stops 傳入的順序走，只計算各段距離／時間（送貨人員自行調整順序時用）。
+   *  預設 false＝依優先客戶與最短路徑自動排序。 */
+  keepOrder?: boolean;
 }
 
 export interface RouteOptimizeResult {

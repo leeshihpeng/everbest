@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { ArrowLeft, Building2, Star, Navigation2, Share2, Check, LucideIcon } from "lucide-react";
+import { ArrowLeft, Building2, Star, Navigation2, Share2, Check, ChevronUp, ChevronDown, LucideIcon } from "lucide-react";
 
 // 設計 tokens（沿用 reference/route-app-prototype.jsx）
 export const C = {
@@ -211,6 +211,9 @@ export interface TimelineStop {
   legDistanceKm: number;
   legDurationMin?: number;
   products?: TimelineProduct[];
+  // 有傳才顯示上下移動按鈕（送貨人員自行調整送貨順序）；已在頭尾的站別傳 undefined
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }
 
 export interface TimelineRoute {
@@ -269,11 +272,19 @@ export function RouteTimeline({
             <div className="rounded-xl px-3 py-2.5" style={{ background: isEnd ? C.bg : C.surface, border: `1px solid ${C.hairline}` }}>
               {n.kind === "stop" ? (
                 <>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[14px]">
                       {n.data.name}
                     </div>
-                    {n.data.isPriority && <PriorityTag />}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {n.data.isPriority && <PriorityTag />}
+                      {(n.data.onMoveUp || n.data.onMoveDown) && (
+                        <div className="flex items-center gap-1">
+                          <MoveButton dir="up" accent={accent} onClick={n.data.onMoveUp} />
+                          <MoveButton dir="down" accent={accent} onClick={n.data.onMoveDown} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div style={{ color: C.muted }} className="text-[12px] mt-0.5">
                     {n.data.subtitle}
@@ -331,6 +342,22 @@ export function RouteTimeline({
         );
       })}
     </div>
+  );
+}
+
+// 手機上拖曳排序不好按，改用上下箭頭一次移動一站
+function MoveButton({ dir, accent, onClick }: { dir: "up" | "down"; accent: string; onClick?: () => void }) {
+  const Icon = dir === "up" ? ChevronUp : ChevronDown;
+  return (
+    <button
+      onClick={onClick}
+      disabled={!onClick}
+      aria-label={dir === "up" ? "往前一站" : "往後一站"}
+      style={{ border: `1px solid ${onClick ? accent : C.hairline}`, color: onClick ? accent : C.hairline }}
+      className="flex items-center justify-center rounded-lg w-7 h-7 disabled:opacity-60"
+    >
+      <Icon size={15} strokeWidth={2.5} />
+    </button>
   );
 }
 

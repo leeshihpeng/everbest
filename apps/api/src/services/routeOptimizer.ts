@@ -43,7 +43,39 @@ async function nearestNeighborOrder(
   return { ordered, legDistances, legDurations };
 }
 
+/** 照傳入順序逐段計算距離／時間，不重新排序（送貨人員自行調整順序後用） */
+async function legsInGivenOrder(
+  origin: RoutePoint,
+  stops: Stop[]
+): Promise<{ legDistances: number[]; legDurations: number[] }> {
+  const legDistances: number[] = [];
+  const legDurations: number[] = [];
+  let cur = origin;
+  for (const s of stops) {
+    const matrix = await getDistanceMatrix([cur], [s]);
+    legDistances.push(matrix[0][0].distanceKm);
+    legDurations.push(matrix[0][0].durationMin);
+    cur = { lat: s.lat, lng: s.lng };
+  }
+  return { legDistances, legDurations };
+}
+
 export async function optimizeRoute(req: RouteOptimizeRequest): Promise<RouteOptimizeResult> {
+  if (req.keepOrder) {
+    const { legDistances, legDurations } = await legsInGivenOrder(req.origin, req.stops);
+    const lastPoint: RoutePoint =
+      req.stops.length > 0 ? { lat: req.stops[req.stops.length - 1].lat, lng: req.stops[req.stops.length - 1].lng } : req.origin;
+    const finalLeg = (await getDistanceMatrix([lastPoint], [req.destination]))[0][0];
+    return {
+      orderedStopRefIds: req.stops.map((s) => s.refId),
+      legs: req.stops.map((s, i) => ({ refId: s.refId, legDistanceKm: legDistances[i], legDurationMin: legDurations[i] })),
+      finalLegDistanceKm: finalLeg.distanceKm,
+      finalLegDurationMin: finalLeg.durationMin,
+      totalDistanceKm: legDistances.reduce((s, d) => s + d, 0) + finalLeg.distanceKm,
+      totalDurationMin: legDurations.reduce((s, d) => s + d, 0) + finalLeg.durationMin,
+    };
+  }
+
   const priorityStops = req.stops.filter((s) => s.isPriority);
   const normalStops = req.stops.filter((s) => !s.isPriority);
 

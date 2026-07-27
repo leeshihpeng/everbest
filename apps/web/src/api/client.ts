@@ -177,6 +177,12 @@ export const api = {
     }>("/orders/select", { method: "POST", body: JSON.stringify(body) }),
   updateOrderStatus: (id: string, status: "DISPATCHED" | "COMPLETED") =>
     request(`/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  // 送貨人員自行調整送貨順序；manual=false＝還原成系統自動排序
+  updateRouteOrder: (orderIds: string[], manual = true) =>
+    request<{ updated: number; manual: boolean }>("/orders/route-order", {
+      method: "PUT",
+      body: JSON.stringify({ orderIds, manual }),
+    }),
   updateItemChecked: (itemId: string, checked: boolean) =>
     request(`/orders/items/${itemId}/checked`, { method: "PATCH", body: JSON.stringify({ checked }) }),
   deleteOrder: (id: string) => request<void>(`/orders/${id}`, { method: "DELETE" }),
