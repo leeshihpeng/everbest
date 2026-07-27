@@ -15,6 +15,15 @@ export const ordersRouter = Router();
 // 交給貨運行配送的派遣單；SELF 代表自家送貨人員
 export const CARRIERS = ["新竹貨運", "大榮貨運"];
 
+/** 今天（台灣時間）零點，換算成 UTC。
+ *  Render 主機跑 UTC，直接用 UTC 零點會把台灣清晨 08:00 前上傳的資料誤判成「昨天」。 */
+function startOfTodayTaipei(): Date {
+  const TAIPEI_OFFSET_MS = 8 * 60 * 60 * 1000;
+  const nowTaipei = new Date(Date.now() + TAIPEI_OFFSET_MS);
+  const midnightTaipei = Date.UTC(nowTaipei.getUTCFullYear(), nowTaipei.getUTCMonth(), nowTaipei.getUTCDate());
+  return new Date(midnightTaipei - TAIPEI_OFFSET_MS);
+}
+
 ordersRouter.use(requireAuth);
 
 // 派遣單建立／異動時通知對象：所有物流主管，以及送貨人員——
@@ -142,7 +151,24 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
       await notifyOrderStakeholders(created[created.length - 1], `今天有 ${created.length} 筆新派遣單待確認`, null);
     }
 
-    res.json({ createdCount: created.length, orderIds: created, errors, detectedHeaders: getCsvHeaders(req.file.buffer) });
+    // 貨運行派遣單每天重新上傳（同一天可分多次上傳、全部累積），
+    // 上傳時順手清掉這家貨運行「非今天上傳」的舊單，貨運派遣頁才不會混到昨天的貨。
+    // 自家配送（SELF）有勾選、指派、配送狀態，不能這樣清，維持原本手動刪除。
+    let purged = 0;
+    if (carrier !== "SELF" && created.length > 0) {
+      const stale = await prisma.dispatchOrder.findMany({
+        where: { carrier, createdAt: { lt: startOfTodayTaipei() } },
+        select: { id: true },
+      });
+      const staleIds = stale.map((o) => o.id);
+      if (staleIds.length > 0) {
+        await prisma.dispatchOrderItem.deleteMany({ where: { orderId: { in: staleIds } } });
+        await prisma.notification.deleteMany({ where: { orderId: { in: staleIds } } });
+        purged = (await prisma.dispatchOrder.deleteMany({ where: { id: { in: staleIds } } })).count;
+      }
+    }
+
+    res.json({ createdCount: created.length, orderIds: created, purged, errors, detectedHeaders: getCsvHeaders(req.file.buffer) });
   } catch (err) {
     next(err);
   }

@@ -41,7 +41,12 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
   const [error, setError] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
-  const [importResult, setImportResult] = useState<{ createdCount: number; errors: string[]; detectedHeaders: string[] } | null>(null);
+  const [importResult, setImportResult] = useState<{
+    createdCount: number;
+    purged: number;
+    errors: string[];
+    detectedHeaders: string[];
+  } | null>(null);
   const [importing, setImporting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [geocoding, setGeocoding] = useState(false);
@@ -157,6 +162,11 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
         <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[13px] mb-2">
           CSV 匯入派遣單（欄位：出貨日期,公司名稱,倉庫住址1,公司電話1,託運備註,訂貨數量之總計）
         </div>
+        {!isSelf && (
+          <div style={{ color: C.muted }} className="text-[11px] mb-2">
+            同一天可分多次上傳，當天的都會保留；上傳時會自動清除非今日上傳的舊派遣單。
+          </div>
+        )}
         <div className="flex flex-col gap-2">
           <input ref={fileRef} type="file" accept=".csv" className="text-[12px] w-full min-w-0" />
           <button
@@ -171,6 +181,7 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
         {importResult && (
           <div className="text-[12px] mt-2" style={{ color: C.muted }}>
             新增 {importResult.createdCount} 筆派遣單
+            {importResult.purged > 0 && `・已清除非今日上傳的舊派遣單 ${importResult.purged} 筆`}
             {importResult.errors.length > 0 && (
               <div style={{ color: C.danger }} className="mt-1">
                 {importResult.errors.length} 筆未匯入：{importResult.errors.join("；")}
