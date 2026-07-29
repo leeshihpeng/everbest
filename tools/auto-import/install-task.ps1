@@ -1,4 +1,4 @@
-# 把自動匯入註冊成 Windows 工作排程（開機自動在背景執行）
+﻿# 把自動匯入註冊成 Windows 工作排程（開機自動在背景執行）
 # 用法（系統管理員 PowerShell）：
 #   powershell -ExecutionPolicy Bypass -File .\install-task.ps1
 

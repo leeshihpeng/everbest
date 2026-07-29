@@ -39,16 +39,32 @@ node C:\Claude\route-scheduler\tools\auto-import\watch.mjs
 畫面會顯示監看中的資料夾，有匯入時會列出「新增／更新／略過」筆數。
 同樣的記錄也會寫進同目錄的 `auto-import.log`。
 
-## 三、設成開機自動執行
+## 三、設成自動執行
 
-以系統管理員開啟 PowerShell，執行同目錄的：
+**方式 A：登入後自動執行（不需要系統管理員權限，建議先用這個）**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\Claude\route-scheduler\tools\auto-import\install-startup.ps1
+```
+
+會在「啟動」資料夾放一個捷徑，每次登入 Windows 後自動以最小化視窗執行。
+取消：把 `啟動` 資料夾（`shell:startup`）裡的「三順派遣單自動匯入」捷徑刪掉即可。
+
+**方式 B：工作排程（需要系統管理員權限）**
+
+好處是開機就跑（不必等登入）、程式當掉會自動重啟。
+以**系統管理員**開啟 PowerShell 後執行：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File C:\Claude\route-scheduler\tools\auto-import\install-task.ps1
 ```
 
-會建立一個名為 `三順派遣單自動匯入` 的工作排程，開機後自動在背景執行。
 要停用：`Unregister-ScheduledTask -TaskName 三順派遣單自動匯入`。
+
+> 兩種方式擇一即可，不要同時裝。
+
+**注意**：`.ps1` 檔請保持 UTF-8 **含 BOM** 的存檔格式，否則 Windows PowerShell 5.1
+會把中文當成 Big5 解讀而出現語法錯誤。
 
 ## 搬到另一台電腦（例如工作電腦）
 
