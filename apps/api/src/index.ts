@@ -63,6 +63,8 @@ app.get("/health", (_req, res) =>
     corsRestricted: allowedOrigins.length > 0,
     corsCount: allowedOrigins.length,
     hasJwtSecret: !!process.env.JWT_SECRET,
+    // 本機自動匯入用的金鑰有沒有設定（只回布林，不吐內容）
+    hasImportKey: !!process.env.IMPORT_API_KEY,
   })
 );
 

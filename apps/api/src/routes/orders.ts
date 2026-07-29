@@ -24,7 +24,22 @@ function startOfTodayTaipei(): Date {
   return new Date(midnightTaipei - TAIPEI_OFFSET_MS);
 }
 
-ordersRouter.use(requireAuth);
+/** 本機自動匯入程式專用的認證：只認 `X-Import-Key`，且**只開放 POST /orders/import**。
+ *  這樣監看資料夾的排程程式不必把 ADMIN 帳號密碼存在電腦上；
+ *  金鑰外洩的最大影響也僅止於「有人能匯入派遣單」，不能查客戶、改人員或刪資料。
+ *  沒設定 IMPORT_API_KEY 就完全不啟用這條路。 */
+function importKeyOrAuth(req: AuthedRequest, res: Parameters<typeof requireAuth>[1], next: Parameters<typeof requireAuth>[2]) {
+  const expected = process.env.IMPORT_API_KEY;
+  const provided = req.header("x-import-key");
+  const isImportRequest = req.method === "POST" && req.path === "/import";
+  if (expected && provided && isImportRequest && provided.length === expected.length && provided === expected) {
+    req.staff = { id: "auto-import", name: "自動匯入", roles: ["ADMIN"] };
+    return next();
+  }
+  return requireAuth(req, res, next);
+}
+
+ordersRouter.use(importKeyOrAuth);
 
 // 派遣單建立／異動時通知對象：所有物流主管，以及送貨人員——
 // 若已指派特定送貨人員就只通知該人，否則（例如尚未指派）廣播給所有送貨人員
@@ -109,6 +124,8 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
     const grouped = groupOrderRowsByCustomer(rows);
     const created: string[] = [];
     const errors: string[] = [];
+    let updated = 0;
+    let skipped = 0;
 
     for (const g of grouped) {
       if (!g.header.customerName || !g.header.address || !g.header.deliveryDate) {
@@ -124,25 +141,48 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
         errors.push(`${g.header.customerName}: 託運備註無法解析出任何品項（略過此筆）`);
         continue;
       }
-      // 交給貨運行的派遣單不需要座標（不做路線規劃、不導航），省下 geocode 呼叫
-      const coords = carrier === "SELF" ? await geocodeAddress(g.header.address) : null;
-      const order = await prisma.dispatchOrder.create({
-        data: {
-          carrier,
-          deliveryDate,
-          customerCode: g.header.customerCode,
-          customerName: g.header.customerName,
-          address: g.header.address,
-          phone: g.header.phone,
-          orderNo: g.header.orderNo,
-          weight: g.header.weight,
-          orderNote: g.header.orderNote,
-          lat: coords?.lat,
-          lng: coords?.lng,
-          items: { create: g.items },
-        },
+      // 自動匯入會重覆送同一天的檔案（ERP 每天覆蓋同一個檔名，中途還可能追加單子），
+      // 因此以「配送方式＋送貨日期＋客戶代號」當同一張派遣單：
+      //   已存在且還沒開始作業（PENDING）→ 更新內容；已勾選／已檢貨／已完成 → 不動它，只回報略過。
+      // 沒有這層判斷的話，自動匯入每跑一次就會多一份重複的派遣單。
+      const existing = await prisma.dispatchOrder.findFirst({
+        where: { carrier, deliveryDate, customerCode: g.header.customerCode },
       });
-      created.push(order.id);
+
+      if (existing && existing.status !== "PENDING") {
+        skipped++;
+        continue;
+      }
+
+      // 交給貨運行的派遣單不需要座標（不做路線規劃、不導航），省下 geocode 呼叫。
+      // 地址沒變就沿用原有座標，避免每次自動匯入都重打 geocode。
+      const needGeocode = carrier === "SELF" && (!existing || existing.address !== g.header.address || existing.lat == null);
+      const coords = needGeocode ? await geocodeAddress(g.header.address) : null;
+
+      const data = {
+        carrier,
+        deliveryDate,
+        customerCode: g.header.customerCode,
+        customerName: g.header.customerName,
+        address: g.header.address,
+        phone: g.header.phone,
+        orderNo: g.header.orderNo,
+        weight: g.header.weight,
+        orderNote: g.header.orderNote,
+        lat: coords?.lat ?? existing?.lat ?? undefined,
+        lng: coords?.lng ?? existing?.lng ?? undefined,
+      };
+
+      if (existing) {
+        await prisma.dispatchOrder.update({
+          where: { id: existing.id },
+          data: { ...data, items: { deleteMany: {}, create: g.items } },
+        });
+        updated++;
+      } else {
+        const order = await prisma.dispatchOrder.create({ data: { ...data, items: { create: g.items } } });
+        created.push(order.id);
+      }
     }
 
     // 5.4：新增時除了通知所有物流主管，也直接廣播給所有送貨人員（此時尚未指派特定人員）
@@ -156,7 +196,7 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
     // 上傳時順手清掉這家貨運行「非今天上傳」的舊單，貨運派遣頁才不會混到昨天的貨。
     // 自家配送（SELF）有勾選、指派、配送狀態，不能這樣清，維持原本手動刪除。
     let purged = 0;
-    if (carrier !== "SELF" && created.length > 0) {
+    if (carrier !== "SELF" && created.length + updated > 0) {
       const stale = await prisma.dispatchOrder.findMany({
         where: { carrier, createdAt: { lt: startOfTodayTaipei() } },
         select: { id: true },
@@ -172,6 +212,8 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
     res.json({
       createdCount: created.length,
       orderIds: created,
+      updatedCount: updated,
+      skippedCount: skipped,
       purged,
       // 讓內勤一眼看出附註有沒有真的帶進來（曾發生匯出檔欄位錯位而整批沒帶到）
       noteCount: grouped.filter((g) => g.header.orderNote).length,
