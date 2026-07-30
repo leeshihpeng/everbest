@@ -11,15 +11,19 @@ export default defineConfig({
       // 這裡關掉自動注入，避免同一個 Service Worker 被註冊兩次
       injectRegister: null,
       manifest: {
-        name: "路線排程系統",
-        short_name: "路線排程",
+        // 現在是三順主目錄（不只路線排程），加到主畫面顯示的名稱一併更新
+        name: "三順系統",
+        short_name: "三順",
+        lang: "zh-Hant",
         start_url: "/",
         display: "standalone",
         background_color: "#F2F4F7",
         theme_color: "#1C2B45",
+        // 圖示檔由 scripts/make-icons.mjs 產生，放在 public/
         icons: [
           { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+          { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
       // 業務/物流路線結果需可離線查看（規格書 8.）

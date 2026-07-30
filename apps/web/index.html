@@ -4,8 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1C2B45" />
-    <title>路線排程系統</title>
-    <link rel="manifest" href="/manifest.json" />
+    <title>三順系統</title>
+    <!-- manifest 由 vite-plugin-pwa 自動注入（/manifest.webmanifest）；
+         這裡原本寫死的 /manifest.json 並不存在，會 404。 -->
+    <!-- iOS 加到主畫面時看的是這兩個：圖示與全螢幕（無網址列）模式 -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="三順" />
   </head>
   <body>
     <div id="root"></div>
