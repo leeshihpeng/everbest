@@ -121,7 +121,8 @@ function MainDirectory() {
           )}
         </div>
       </div>
-      <div className="p-4 -mt-5">
+      {/* 原本用負邊距讓磁磚往上疊在藍色標題上，會把標題底部蓋掉；改成接在標題下方 */}
+      <div className="p-4 pt-3">
         <TileGrid>
           {systems
             .filter((s) => s.show)

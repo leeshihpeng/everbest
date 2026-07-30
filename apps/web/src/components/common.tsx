@@ -79,23 +79,23 @@ export function Tile({
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-center justify-start text-center rounded-2xl px-2 pt-3 pb-2.5 shadow-sm active:opacity-80"
-      style={{ background: "#fff", minHeight: compact ? 92 : 104 }}
+      className="flex flex-col items-center justify-start text-center rounded-2xl px-2 pt-2.5 pb-2 shadow-sm active:opacity-80"
+      style={{ background: "#fff", minHeight: compact ? 84 : 92 }}
     >
       <div
-        className="rounded-2xl flex items-center justify-center shrink-0 mb-1.5"
-        style={{ width: compact ? 40 : 46, height: compact ? 40 : 46, background: dimmed ? C.bg : soft }}
+        className="rounded-2xl flex items-center justify-center shrink-0 mb-1"
+        style={{ width: compact ? 36 : 40, height: compact ? 36 : 40, background: dimmed ? C.bg : soft }}
       >
-        <Icon size={compact ? 20 : 24} color={dimmed ? C.muted : color} />
+        <Icon size={compact ? 18 : 21} color={dimmed ? C.muted : color} />
       </div>
       <div
         style={{ fontFamily: "'Noto Sans TC', sans-serif" }}
-        className={`font-bold leading-tight ${compact ? "text-[12px]" : "text-[14px]"}`}
+        className={`font-bold leading-tight ${compact ? "text-[11px]" : "text-[13px]"}`}
       >
         {label}
       </div>
       {sub && (
-        <div style={{ color: C.muted }} className="text-[11px] mt-0.5 leading-tight">
+        <div style={{ color: C.muted }} className="text-[10px] mt-0.5 leading-tight">
           {sub}
         </div>
       )}
