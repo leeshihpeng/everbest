@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate } from "react-router-dom";
-import { Truck, User, Building2, LogOut, Bell, ArrowLeft, Map, ClipboardCheck, FileText, PackageSearch, Tags, KeyRound } from "lucide-react";
+import { Truck, Building2, LogOut, Bell, ArrowLeft, Map, ClipboardCheck, FileText, PackageSearch, Tags, KeyRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import BizSetup from "./pages/biz/BizSetup";
 import ManagerSelect from "./pages/logi/manager/ManagerSelect";
 import DriverRoute from "./pages/logi/driver/DriverRoute";
 import AdminHome from "./pages/admin/AdminHome";
@@ -42,15 +41,17 @@ function ChangePasswordRoute() {
   return <ChangePassword forced={!!getAuthedStaff()?.mustChangePassword} />;
 }
 
-// 三順主目錄 — 各應用系統的入口。路線排程系統所有登入者皆可進入（內部再依角色顯示模組）；
+// 三順主目錄 — 各應用系統的入口。
 // 檢驗報告／輸入許可證／貨運追蹤僅限業務(SALES)與主管(MANAGER)。
 function MainDirectory() {
   const navigate = useNavigate();
   const staff = getAuthedStaff();
   const canBizSystems = !!staff && (staff.roles.includes("SALES") || staff.roles.includes("MANAGER"));
   const isAdmin = !!staff?.roles.includes("ADMIN");
-  // 貨運派遣：主管與倉管使用
-  const canCarrierDispatch = !!staff && (staff.roles.includes("MANAGER") || staff.roles.includes("WAREHOUSE"));
+  // 貨運派遣是倉管的作業，內勤（ADMIN）需要查看；一般物流主管不列入
+  const canCarrierDispatch = !!staff && (staff.roles.includes("WAREHOUSE") || staff.roles.includes("ADMIN"));
+  // 物流主管（派遣單勾選與指派）改成主目錄的獨立入口；倉管進去是唯讀
+  const canLogiManager = !!staff && (staff.roles.includes("MANAGER") || staff.roles.includes("WAREHOUSE"));
 
   // 只送貨的人在主目錄沒有其他可選項目，直接帶到今日配送名單
   if (staff && isDriverOnly(staff.roles)) return <Navigate to="/logi/driver" replace />;
@@ -63,8 +64,9 @@ function MainDirectory() {
   // 兩欄磁磚放不下長句，說明一律縮短成一個短詞
   const systems: { key: string; label: string; sub: string; icon: LucideIcon; to: string; color: string; soft: string; show: boolean }[] = [
     { key: "admin", label: "內勤後台", sub: "客戶／人員／派遣單", icon: Building2, to: "/admin", color: C.navy, soft: "#EDEFF2", show: isAdmin },
-    // 路線排程系統裡的模組只對業務／物流主管／送貨人員開放，其他人進去會是空的，所以不顯示
-    { key: "route", label: "路線排程系統", sub: "業務／物流／送貨", icon: Map, to: "/route", color: C.logiAccent, soft: C.logiAccentSoft, show: !!staff && ["SALES", "MANAGER", "DRIVER", "WAREHOUSE"].some((r) => staff.roles.includes(r)) },
+    { key: "logi", label: "物流主管", sub: "派遣單勾選與指派", icon: Map, to: "/logi/manager", color: C.logiAccent, soft: C.logiAccentSoft, show: canLogiManager },
+    // 業務模式已移除，路線排程系統底下只剩送貨人員，因此只對送貨人員顯示
+    { key: "route", label: "路線排程系統", sub: "今日配送名單", icon: Truck, to: "/route", color: C.logiAccent, soft: C.logiAccentSoft, show: !!staff?.roles.includes("DRIVER") },
     { key: "carrier", label: "貨運派遣", sub: "新竹／大榮清點", icon: Truck, to: "/carrier", color: C.logiAccent, soft: C.logiAccentSoft, show: canCarrierDispatch },
     { key: "inspection", label: "檢驗報告", sub: "查詢與管理", icon: ClipboardCheck, to: "/inspection", color: C.bizAccent, soft: C.bizAccentSoft, show: canBizSystems },
     { key: "permit", label: "輸入許可證", sub: "進口許可證", icon: FileText, to: "/permit", color: C.gold, soft: C.goldSoft, show: canBizSystems },
@@ -155,28 +157,8 @@ function RouteSchedulerHome() {
         </div>
       </div>
       <div className="p-4 -mt-5">
+        {/* 業務模式已移除；物流主管改成主目錄的獨立入口，這裡只留送貨人員 */}
         <TileGrid>
-          {staff?.roles.includes("SALES") && (
-            <Tile
-              icon={User}
-              label="業務模式"
-              sub="勾選客戶產生路線"
-              color={C.bizAccent}
-              soft={C.bizAccentSoft}
-              onClick={() => navigate("/biz")}
-            />
-          )}
-          {/* 倉管也看得到，但只能看：勾選、指派、優先標記都不會出現（ManagerSelect 的 canEdit） */}
-          {(staff?.roles.includes("MANAGER") || staff?.roles.includes("WAREHOUSE")) && (
-            <Tile
-              icon={Truck}
-              label={staff?.roles.includes("MANAGER") ? "物流主管" : "派遣單檢視"}
-              sub={staff?.roles.includes("MANAGER") ? "勾選與優先標記" : "查看派遣單（唯讀）"}
-              color={C.logiAccent}
-              soft={C.logiAccentSoft}
-              onClick={() => navigate("/logi/manager")}
-            />
-          )}
           {staff?.roles.includes("DRIVER") && (
             <Tile
               icon={Truck}
@@ -188,10 +170,10 @@ function RouteSchedulerHome() {
             />
           )}
         </TileGrid>
-        {/* 內勤後台已移到主目錄首位，這裡不再重複顯示 */}
-        {staff && !["SALES", "MANAGER", "DRIVER", "WAREHOUSE"].some((r) => staff.roles.includes(r)) && (
+        {/* 內勤後台與物流主管都在主目錄，這裡不再重複顯示 */}
+        {staff && !staff.roles.includes("DRIVER") && (
           <div style={{ color: C.muted }} className="text-center text-[13px] py-8">
-            你的帳號目前沒有指派任何操作權限，請聯絡管理員。
+            這裡只有送貨人員的今日配送名單，你的帳號沒有這個身份。
           </div>
         )}
       </div>
@@ -257,7 +239,8 @@ export default function App() {
               <Route
                 path="/carrier"
                 element={
-                  <RequireRole role={["MANAGER", "WAREHOUSE"]}>
+                  // 貨運派遣是倉管作業，內勤需要查看；一般物流主管（例如徐文卿）不進這裡
+                  <RequireRole role={["ADMIN", "WAREHOUSE"]}>
                     <CarrierDispatch />
                   </RequireRole>
                 }
@@ -270,14 +253,7 @@ export default function App() {
                   </RequireRole>
                 }
               />
-              <Route
-                path="/biz"
-                element={
-                  <RequireRole role="SALES">
-                    <BizSetup />
-                  </RequireRole>
-                }
-              />
+              {/* 業務模式（/biz）已依需求移除入口與路由；頁面原始碼保留在 pages/biz，要恢復時把這段加回來即可 */}
               <Route
                 path="/logi/manager"
                 element={
