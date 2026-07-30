@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, Download, Trash2, Share2, ChevronRight, FolderClosed, FolderPlus, Upload } from "lucide-react";
+import { Eye, Download, Trash2, Share2, FolderClosed, FolderPlus, Upload } from "lucide-react";
 import { api, InspectionReportMeta } from "../api/client";
 import { getAuthedStaff } from "../lib/auth";
-import { C, TopBar } from "../components/common";
+import { C, TopBar, TileGrid, Tile } from "../components/common";
 
 function fmtDate(iso: string | null): string {
   return iso ? iso.slice(0, 10).replace(/-/g, "/") : "";
@@ -269,27 +269,20 @@ export default function InspectionReports() {
               目前沒有檢驗報告
             </div>
           ) : (
-            years.map((y) => (
-              <button
-                key={y.year}
-                onClick={() => openYear(y.year)}
-                className="w-full flex items-center gap-3 rounded-2xl p-4 mb-3 shadow-sm"
-                style={{ background: "#fff" }}
-              >
-                <div className="rounded-xl flex items-center justify-center" style={{ width: 46, height: 46, background: C.bizAccentSoft }}>
-                  <FolderClosed size={22} color={C.bizAccent} />
-                </div>
-                <div className="text-left flex-1">
-                  <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[15px]">
-                    {y.year}檢驗報告
-                  </div>
-                  <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
-                    共 {y.count} 份報告
-                  </div>
-                </div>
-                <ChevronRight size={18} color={C.muted} />
-              </button>
-            ))
+            <TileGrid>
+              {years.map((y) => (
+                <Tile
+                  key={y.year}
+                  icon={FolderClosed}
+                  label={`${y.year}檢驗報告`}
+                  sub={`${y.count} 份報告`}
+                  color={C.bizAccent}
+                  soft={C.bizAccentSoft}
+                  dimmed={y.count === 0}
+                  onClick={() => openYear(y.year)}
+                />
+              ))}
+            </TileGrid>
           )
         ) : reports.length === 0 ? (
           <div className="text-center text-[13px] py-8" style={{ color: C.muted }}>

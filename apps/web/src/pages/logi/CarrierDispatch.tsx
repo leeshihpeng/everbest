@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, Truck, Check } from "lucide-react";
+import { Truck, Check } from "lucide-react";
 import { api } from "../../api/client";
-import { C, TopBar, ProductSummary, QtySubtotal, sumQty } from "../../components/common";
+import { C, TopBar, ProductSummary, QtySubtotal, sumQty, TileGrid, Tile } from "../../components/common";
 
 const CARRIERS = ["新竹貨運", "大榮貨運"];
 
@@ -140,27 +140,20 @@ export default function CarrierDispatch() {
             載入中…
           </div>
         ) : !carrier ? (
-          CARRIERS.map((c) => (
-            <button
-              key={c}
-              onClick={() => open(c)}
-              className="w-full flex items-center gap-3 rounded-2xl p-4 mb-3 shadow-sm"
-              style={{ background: "#fff" }}
-            >
-              <div className="rounded-xl flex items-center justify-center shrink-0" style={{ width: 46, height: 46, background: C.logiAccentSoft }}>
-                <Truck size={22} color={C.logiAccent} />
-              </div>
-              <div className="text-left flex-1">
-                <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[15px]">
-                  {c}
-                </div>
-                <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
-                  待出貨 {counts[c] ?? 0} 筆
-                </div>
-              </div>
-              <ChevronRight size={18} color={C.muted} className="shrink-0" />
-            </button>
-          ))
+          <TileGrid>
+            {CARRIERS.map((c) => (
+              <Tile
+                key={c}
+                icon={Truck}
+                label={c}
+                sub={`待出貨 ${counts[c] ?? 0} 筆`}
+                color={C.logiAccent}
+                soft={C.logiAccentSoft}
+                dimmed={(counts[c] ?? 0) === 0}
+                onClick={() => open(c)}
+              />
+            ))}
+          </TileGrid>
         ) : orders.length === 0 ? (
           <div className="text-center text-[13px] py-8" style={{ color: C.muted }}>
             目前沒有要交給{carrier}的派遣單

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate } from "react-router-dom";
-import { ChevronRight, Truck, User, Building2, LogOut, Bell, ArrowLeft, Map, ClipboardCheck, FileText, PackageSearch, Tags, KeyRound } from "lucide-react";
+import { Truck, User, Building2, LogOut, Bell, ArrowLeft, Map, ClipboardCheck, FileText, PackageSearch, Tags, KeyRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import BizSetup from "./pages/biz/BizSetup";
 import ManagerSelect from "./pages/logi/manager/ManagerSelect";
@@ -15,7 +15,7 @@ import CarrierDispatch from "./pages/logi/CarrierDispatch";
 import QuoteSheetPage from "./pages/QuoteSheetPage";
 import ChangePassword from "./pages/ChangePassword";
 import { getAuthedStaff, isLoggedIn, clearSession, isDriverOnly } from "./lib/auth";
-import { C } from "./components/common";
+import { C, TileGrid, Tile } from "./components/common";
 import { api } from "./api/client";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
@@ -60,20 +60,21 @@ function MainDirectory() {
     navigate("/login");
   }
 
+  // 兩欄磁磚放不下長句，說明一律縮短成一個短詞
   const systems: { key: string; label: string; sub: string; icon: LucideIcon; to: string; color: string; soft: string; show: boolean }[] = [
-    { key: "admin", label: "內勤後台", sub: "客戶／人員／派遣單管理", icon: Building2, to: "/admin", color: C.navy, soft: "#EDEFF2", show: isAdmin },
+    { key: "admin", label: "內勤後台", sub: "客戶／人員／派遣單", icon: Building2, to: "/admin", color: C.navy, soft: "#EDEFF2", show: isAdmin },
     // 路線排程系統裡的模組只對業務／物流主管／送貨人員開放，其他人進去會是空的，所以不顯示
-    { key: "route", label: "路線排程系統", sub: "業務／物流／送貨／內勤管理", icon: Map, to: "/route", color: C.logiAccent, soft: C.logiAccentSoft, show: !!staff && ["SALES", "MANAGER", "DRIVER", "WAREHOUSE"].some((r) => staff.roles.includes(r)) },
-    { key: "carrier", label: "貨運派遣", sub: "新竹貨運／大榮貨運出貨清點", icon: Truck, to: "/carrier", color: C.logiAccent, soft: C.logiAccentSoft, show: canCarrierDispatch },
-    { key: "inspection", label: "檢驗報告", sub: "產品檢驗報告查詢與管理", icon: ClipboardCheck, to: "/inspection", color: C.bizAccent, soft: C.bizAccentSoft, show: canBizSystems },
-    { key: "permit", label: "輸入許可證", sub: "進口許可證申請與追蹤", icon: FileText, to: "/permit", color: C.gold, soft: C.goldSoft, show: canBizSystems },
-    { key: "tracking", label: "貨運追蹤", sub: "進出口貨運狀態追蹤", icon: PackageSearch, to: "/tracking", color: C.navy, soft: "#EDEFF2", show: canBizSystems },
-    { key: "quote", label: "產品報價單", sub: "產品項目、規格與價格查詢", icon: Tags, to: "/quote", color: C.logiAccent, soft: C.logiAccentSoft, show: canBizSystems },
+    { key: "route", label: "路線排程系統", sub: "業務／物流／送貨", icon: Map, to: "/route", color: C.logiAccent, soft: C.logiAccentSoft, show: !!staff && ["SALES", "MANAGER", "DRIVER", "WAREHOUSE"].some((r) => staff.roles.includes(r)) },
+    { key: "carrier", label: "貨運派遣", sub: "新竹／大榮清點", icon: Truck, to: "/carrier", color: C.logiAccent, soft: C.logiAccentSoft, show: canCarrierDispatch },
+    { key: "inspection", label: "檢驗報告", sub: "查詢與管理", icon: ClipboardCheck, to: "/inspection", color: C.bizAccent, soft: C.bizAccentSoft, show: canBizSystems },
+    { key: "permit", label: "輸入許可證", sub: "進口許可證", icon: FileText, to: "/permit", color: C.gold, soft: C.goldSoft, show: canBizSystems },
+    { key: "tracking", label: "貨運追蹤", sub: "出貨狀態追蹤", icon: PackageSearch, to: "/tracking", color: C.navy, soft: "#EDEFF2", show: canBizSystems },
+    { key: "quote", label: "產品報價單", sub: "規格與價格", icon: Tags, to: "/quote", color: C.logiAccent, soft: C.logiAccentSoft, show: canBizSystems },
   ];
 
   return (
     <div>
-      <div style={{ background: C.navy }} className="px-5 pt-8 pb-10 rounded-b-3xl text-white">
+      <div style={{ background: C.navy }} className="px-5 pt-6 pb-8 rounded-b-3xl text-white">
         <div style={{ fontFamily: "Manrope", color: "#9FB0C9" }} className="text-[11px] font-bold tracking-wide mb-1">
           SANSOON PORTAL
         </div>
@@ -95,32 +96,13 @@ function MainDirectory() {
         </div>
       </div>
       <div className="p-4 -mt-5">
-        {systems
-          .filter((s) => s.show)
-          .map((s) => {
-            const Icon = s.icon;
-            return (
-              <Link
-                key={s.key}
-                to={s.to}
-                className="w-full flex items-center gap-3 rounded-2xl p-4 mb-3 shadow-sm"
-                style={{ background: "#fff" }}
-              >
-                <div className="rounded-xl flex items-center justify-center" style={{ width: 46, height: 46, background: s.soft }}>
-                  <Icon size={22} color={s.color} />
-                </div>
-                <div className="text-left flex-1">
-                  <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[15px]">
-                    {s.label}
-                  </div>
-                  <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
-                    {s.sub}
-                  </div>
-                </div>
-                <ChevronRight size={18} color={C.muted} />
-              </Link>
-            );
-          })}
+        <TileGrid>
+          {systems
+            .filter((s) => s.show)
+            .map((s) => (
+              <Tile key={s.key} icon={s.icon} label={s.label} sub={s.sub} color={s.color} soft={s.soft} onClick={() => navigate(s.to)} />
+            ))}
+        </TileGrid>
       </div>
     </div>
   );
@@ -173,55 +155,39 @@ function RouteSchedulerHome() {
         </div>
       </div>
       <div className="p-4 -mt-5">
-        {staff?.roles.includes("SALES") && (
-          <Link to="/biz" className="w-full flex items-center gap-3 rounded-2xl p-4 mb-3 shadow-sm" style={{ background: "#fff" }}>
-            <div className="rounded-xl flex items-center justify-center" style={{ width: 46, height: 46, background: C.bizAccentSoft }}>
-              <User size={22} color={C.bizAccent} />
-            </div>
-            <div className="text-left flex-1">
-              <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[15px]">
-                業務模式
-              </div>
-              <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
-                自行勾選拜訪客戶，產生最佳化路線
-              </div>
-            </div>
-            <ChevronRight size={18} color={C.muted} />
-          </Link>
-        )}
-        {/* 倉管也看得到，但只能看：勾選、指派、優先標記都不會出現（ManagerSelect 的 canEdit） */}
-        {(staff?.roles.includes("MANAGER") || staff?.roles.includes("WAREHOUSE")) && (
-          <Link to="/logi/manager" className="w-full flex items-center gap-3 rounded-2xl p-4 mb-3 shadow-sm" style={{ background: "#fff" }}>
-            <div className="rounded-xl flex items-center justify-center" style={{ width: 46, height: 46, background: C.logiAccentSoft }}>
-              <Truck size={22} color={C.logiAccent} />
-            </div>
-            <div className="text-left flex-1">
-              <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[15px]">
-                {staff?.roles.includes("MANAGER") ? "物流模式 — 物流主管" : "物流模式 — 派遣單檢視"}
-              </div>
-              <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
-                {staff?.roles.includes("MANAGER") ? "派遣單勾選與優先標記" : "查看派遣單與貨品數量（唯讀）"}
-              </div>
-            </div>
-            <ChevronRight size={18} color={C.muted} />
-          </Link>
-        )}
-        {staff?.roles.includes("DRIVER") && (
-          <Link to="/logi/driver" className="w-full flex items-center gap-3 rounded-2xl p-4 mb-3 shadow-sm" style={{ background: "#fff" }}>
-            <div className="rounded-xl flex items-center justify-center" style={{ width: 46, height: 46, background: C.logiAccentSoft }}>
-              <Truck size={22} color={C.logiAccent} />
-            </div>
-            <div className="text-left flex-1">
-              <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[15px]">
-                物流模式 — 送貨人員
-              </div>
-              <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
-                今日配送名單與路線調整
-              </div>
-            </div>
-            <ChevronRight size={18} color={C.muted} />
-          </Link>
-        )}
+        <TileGrid>
+          {staff?.roles.includes("SALES") && (
+            <Tile
+              icon={User}
+              label="業務模式"
+              sub="勾選客戶產生路線"
+              color={C.bizAccent}
+              soft={C.bizAccentSoft}
+              onClick={() => navigate("/biz")}
+            />
+          )}
+          {/* 倉管也看得到，但只能看：勾選、指派、優先標記都不會出現（ManagerSelect 的 canEdit） */}
+          {(staff?.roles.includes("MANAGER") || staff?.roles.includes("WAREHOUSE")) && (
+            <Tile
+              icon={Truck}
+              label={staff?.roles.includes("MANAGER") ? "物流主管" : "派遣單檢視"}
+              sub={staff?.roles.includes("MANAGER") ? "勾選與優先標記" : "查看派遣單（唯讀）"}
+              color={C.logiAccent}
+              soft={C.logiAccentSoft}
+              onClick={() => navigate("/logi/manager")}
+            />
+          )}
+          {staff?.roles.includes("DRIVER") && (
+            <Tile
+              icon={Truck}
+              label="送貨人員"
+              sub="今日配送名單"
+              color={C.logiAccent}
+              soft={C.logiAccentSoft}
+              onClick={() => navigate("/logi/driver")}
+            />
+          )}
+        </TileGrid>
         {/* 內勤後台已移到主目錄首位，這裡不再重複顯示 */}
         {staff && !["SALES", "MANAGER", "DRIVER", "WAREHOUSE"].some((r) => staff.roles.includes(r)) && (
           <div style={{ color: C.muted }} className="text-center text-[13px] py-8">
@@ -236,12 +202,14 @@ function RouteSchedulerHome() {
 export default function App() {
   return (
     <BrowserRouter>
-      <div style={{ background: "#0F1720", minHeight: "100vh" }} className="flex items-center justify-center p-4">
+      {/* 手機上滿版顯示（不留深色外框與圓角），電腦版才維持置中的手機外框樣式。
+          高度用 dvh：外框若寫死 780px，螢幕較矮的手機不論內容多少都會被迫捲動。 */}
+      <div style={{ background: "#0F1720" }} className="flex items-center justify-center min-h-[100dvh] p-0 sm:p-4">
         <div
-          style={{ width: 420, maxWidth: "100%", background: C.bg, borderRadius: 24, boxShadow: "0 30px 60px rgba(0,0,0,0.4)" }}
-          className="overflow-hidden relative"
+          style={{ width: 420, maxWidth: "100%", background: C.bg }}
+          className="overflow-hidden relative w-full sm:rounded-3xl sm:shadow-2xl"
         >
-          <div style={{ minHeight: 780 }} className="relative">
+          <div className="relative min-h-[100dvh] sm:min-h-[780px]">
             <Routes>
               <Route path="/login" element={<Login />} />
               {/* 不能包 RequireAuth，否則被重設密碼的人會在這裡無限轉圈 */}

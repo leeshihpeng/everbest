@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, FolderClosed, Upload, Truck, Trash2 } from "lucide-react";
+import { FolderClosed, Upload, Truck, Trash2 } from "lucide-react";
 import { api, ShipmentRow } from "../api/client";
 import { getAuthedStaff } from "../lib/auth";
-import { C, TopBar } from "../components/common";
+import { C, TopBar, TileGrid, Tile } from "../components/common";
 
 interface Folder {
   region: string;
@@ -164,34 +164,20 @@ export default function ShipmentTracking() {
               目前沒有可查看的託運資料
             </div>
           ) : (
-            folders.map((f) => (
-              <button
-                key={`${f.region}-${f.carrier}`}
-                onClick={() => openFolder(f)}
-                className="w-full flex items-center gap-3 rounded-2xl p-4 mb-3 shadow-sm"
-                style={{ background: "#fff" }}
-              >
-                <div
-                  className="rounded-xl flex items-center justify-center shrink-0"
-                  style={{ width: 46, height: 46, background: f.carrier === "新竹貨運" ? C.bizAccentSoft : C.goldSoft }}
-                >
-                  {f.count > 0 ? (
-                    <Truck size={22} color={f.carrier === "新竹貨運" ? C.bizAccent : C.gold} />
-                  ) : (
-                    <FolderClosed size={22} color={C.muted} />
-                  )}
-                </div>
-                <div className="text-left flex-1 min-w-0">
-                  <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[15px]">
-                    {f.region} {f.carrier}
-                  </div>
-                  <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
-                    共 {f.count} 筆託運
-                  </div>
-                </div>
-                <ChevronRight size={18} color={C.muted} className="shrink-0" />
-              </button>
-            ))
+            <TileGrid>
+              {folders.map((f) => (
+                <Tile
+                  key={`${f.region}-${f.carrier}`}
+                  icon={f.count > 0 ? Truck : FolderClosed}
+                  label={`${f.region} ${f.carrier}`}
+                  sub={`${f.count} 筆託運`}
+                  color={f.carrier === "新竹貨運" ? C.bizAccent : C.gold}
+                  soft={f.carrier === "新竹貨運" ? C.bizAccentSoft : C.goldSoft}
+                  dimmed={f.count === 0}
+                  onClick={() => openFolder(f)}
+                />
+              ))}
+            </TileGrid>
           )
         ) : rows.length === 0 ? (
           <div className="text-center text-[13px] py-8" style={{ color: C.muted }}>

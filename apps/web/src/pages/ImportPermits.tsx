@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, Download, Trash2, Share2, ChevronRight, FolderClosed, Upload } from "lucide-react";
+import { Eye, Download, Trash2, Share2, FolderClosed, Upload } from "lucide-react";
 import { api, ImportPermitMeta } from "../api/client";
 import { getAuthedStaff } from "../lib/auth";
-import { C, TopBar } from "../components/common";
+import { C, TopBar, TileGrid, Tile } from "../components/common";
 
 function fmtDate(iso: string): string {
   return iso.slice(0, 10).replace(/-/g, "/");
@@ -209,27 +209,22 @@ export default function ImportPermits() {
               目前沒有輸入許可證
             </div>
           ) : (
-            categories.map((c) => (
-              <button
-                key={c.category}
-                onClick={() => openCategory(c.category)}
-                className="w-full flex items-center gap-3 rounded-2xl p-4 mb-3 shadow-sm"
-                style={{ background: "#fff" }}
-              >
-                <div className="rounded-xl flex items-center justify-center shrink-0" style={{ width: 46, height: 46, background: C.goldSoft }}>
-                  <FolderClosed size={22} color={C.gold} />
-                </div>
-                <div className="text-left flex-1 min-w-0">
-                  <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[15px] truncate">
-                    {c.category}
-                  </div>
-                  <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
-                    共 {c.count} 份許可證
-                  </div>
-                </div>
-                <ChevronRight size={18} color={C.muted} className="shrink-0" />
-              </button>
-            ))
+            // 產品項目有二十幾項，一頁本來就放不下；改三欄讓需要捲動的距離減半
+            <TileGrid cols={3}>
+              {categories.map((c) => (
+                <Tile
+                  key={c.category}
+                  icon={FolderClosed}
+                  label={c.category}
+                  sub={`${c.count} 份`}
+                  color={C.gold}
+                  soft={C.goldSoft}
+                  dimmed={c.count === 0}
+                  compact
+                  onClick={() => openCategory(c.category)}
+                />
+              ))}
+            </TileGrid>
           )
         ) : permits.length === 0 ? (
           <div className="text-center text-[13px] py-8" style={{ color: C.muted }}>

@@ -48,6 +48,61 @@ export function TopBar({
   );
 }
 
+/** 選單／資料夾畫面共用的大圖示磁磚。
+ *  改成兩欄格狀是為了讓項目較多的畫面（主目錄 7 項、貨運追蹤 6 個資料夾、
+ *  輸入許可證多個品項）在手機上不必捲頁就看得完。 */
+export function TileGrid({ children, cols = 2 }: { children: ReactNode; cols?: 2 | 3 }) {
+  return <div className={`grid gap-2.5 ${cols === 3 ? "grid-cols-3" : "grid-cols-2"}`}>{children}</div>;
+}
+
+export function Tile({
+  icon: Icon,
+  label,
+  sub,
+  color,
+  soft,
+  onClick,
+  dimmed,
+  compact,
+}: {
+  icon: LucideIcon;
+  label: string;
+  sub?: string;
+  color: string;
+  soft: string;
+  onClick: () => void;
+  /** 例如筆數為 0 的資料夾，圖示轉灰但仍可點進去 */
+  dimmed?: boolean;
+  /** 三欄排列時整體縮小一號，讓標籤在窄磁磚裡還讀得清楚 */
+  compact?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex flex-col items-center justify-start text-center rounded-2xl px-2 pt-3 pb-2.5 shadow-sm active:opacity-80"
+      style={{ background: "#fff", minHeight: compact ? 92 : 104 }}
+    >
+      <div
+        className="rounded-2xl flex items-center justify-center shrink-0 mb-1.5"
+        style={{ width: compact ? 40 : 46, height: compact ? 40 : 46, background: dimmed ? C.bg : soft }}
+      >
+        <Icon size={compact ? 20 : 24} color={dimmed ? C.muted : color} />
+      </div>
+      <div
+        style={{ fontFamily: "'Noto Sans TC', sans-serif" }}
+        className={`font-bold leading-tight ${compact ? "text-[12px]" : "text-[14px]"}`}
+      >
+        {label}
+      </div>
+      {sub && (
+        <div style={{ color: C.muted }} className="text-[11px] mt-0.5 leading-tight">
+          {sub}
+        </div>
+      )}
+    </button>
+  );
+}
+
 export function PriorityTag() {
   return (
     <span
