@@ -330,8 +330,9 @@ export default function DriverRoute() {
       <TopBar
         title="今日配送名單（送貨人員）"
         accent={C.logiAccent}
-        // 只送貨的人是直接登入到這一頁的，沒有上一層可回；改在右側提供登出
-        onBack={driverOnly ? undefined : () => navigate("/route")}
+        // 只送貨的人是直接登入到這一頁的，沒有上一層可回；改在右側提供登出。
+        // 其他人（例如業務兼司機）是從主目錄直接進來的，返回就回主目錄。
+        onBack={driverOnly ? undefined : () => navigate("/")}
         right={
           <div className="flex items-center gap-1">
             <button onClick={() => navigate("/notifications")} className="relative p-1">

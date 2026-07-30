@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate } from "react-router-dom";
-import { Truck, Building2, LogOut, Bell, ArrowLeft, Map, ClipboardCheck, FileText, PackageSearch, Tags, KeyRound } from "lucide-react";
+import { Truck, Building2, LogOut, Bell, Map, ClipboardCheck, FileText, PackageSearch, Tags, KeyRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import ManagerSelect from "./pages/logi/manager/ManagerSelect";
 import DriverRoute from "./pages/logi/driver/DriverRoute";
@@ -46,12 +46,22 @@ function ChangePasswordRoute() {
 function MainDirectory() {
   const navigate = useNavigate();
   const staff = getAuthedStaff();
+  const [unreadCount, setUnreadCount] = useState(0);
   const canBizSystems = !!staff && (staff.roles.includes("SALES") || staff.roles.includes("MANAGER"));
   const isAdmin = !!staff?.roles.includes("ADMIN");
   // 貨運派遣是倉管的作業，內勤（ADMIN）需要查看；一般物流主管不列入
   const canCarrierDispatch = !!staff && (staff.roles.includes("WAREHOUSE") || staff.roles.includes("ADMIN"));
   // 物流主管（派遣單勾選與指派）改成主目錄的獨立入口；倉管進去是唯讀
   const canLogiManager = !!staff && (staff.roles.includes("MANAGER") || staff.roles.includes("WAREHOUSE"));
+
+  // 通知鈴鐺原本在「路線排程系統」那一頁，該頁移除後改放主目錄，
+  // 否則物流主管與倉管會沒有任何入口看得到派遣單異動通知。
+  useEffect(() => {
+    api
+      .getNotifications()
+      .then((list) => setUnreadCount(list.filter((n) => !n.isRead).length))
+      .catch(() => {});
+  }, []);
 
   // 只送貨的人在主目錄沒有其他可選項目，直接帶到今日配送名單
   if (staff && isDriverOnly(staff.roles)) return <Navigate to="/logi/driver" replace />;
@@ -65,8 +75,9 @@ function MainDirectory() {
   const systems: { key: string; label: string; sub: string; icon: LucideIcon; to: string; color: string; soft: string; show: boolean }[] = [
     { key: "admin", label: "內勤後台", sub: "客戶／人員／派遣單", icon: Building2, to: "/admin", color: C.navy, soft: "#EDEFF2", show: isAdmin },
     { key: "logi", label: "物流主管", sub: "派遣單勾選與指派", icon: Map, to: "/logi/manager", color: C.logiAccent, soft: C.logiAccentSoft, show: canLogiManager },
-    // 業務模式已移除，路線排程系統底下只剩送貨人員，因此只對送貨人員顯示
-    { key: "route", label: "路線排程系統", sub: "今日配送名單", icon: Truck, to: "/route", color: C.logiAccent, soft: C.logiAccentSoft, show: !!staff?.roles.includes("DRIVER") },
+    // 直接進今日配送名單。原本要先進「路線排程系統」再點一次，
+    // 業務模式移除後那一層只剩一個選項，等於白點一下，所以拿掉。
+    { key: "driver", label: "送貨人員", sub: "今日配送名單", icon: Truck, to: "/logi/driver", color: C.logiAccent, soft: C.logiAccentSoft, show: !!staff?.roles.includes("DRIVER") },
     { key: "carrier", label: "貨運派遣", sub: "新竹／大榮清點", icon: Truck, to: "/carrier", color: C.logiAccent, soft: C.logiAccentSoft, show: canCarrierDispatch },
     { key: "inspection", label: "檢驗報告", sub: "查詢與管理", icon: ClipboardCheck, to: "/inspection", color: C.bizAccent, soft: C.bizAccentSoft, show: canBizSystems },
     { key: "permit", label: "輸入許可證", sub: "進口許可證", icon: FileText, to: "/permit", color: C.gold, soft: C.goldSoft, show: canBizSystems },
@@ -87,6 +98,17 @@ function MainDirectory() {
           <span>{staff ? `你好，${staff.name}` : ""}</span>
           {staff && (
             <div className="flex items-center gap-3">
+              <button onClick={() => navigate("/notifications")} className="relative flex items-center gap-1 text-white/80">
+                <Bell size={12} /> 通知
+                {unreadCount > 0 && (
+                  <span
+                    style={{ background: C.danger }}
+                    className="absolute -top-1.5 -right-2 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5"
+                  >
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
               <Link to="/password" className="flex items-center gap-1 text-white/80">
                 <KeyRound size={12} /> 修改密碼
               </Link>
@@ -110,76 +132,8 @@ function MainDirectory() {
   );
 }
 
-// 路線排程系統首頁 — 依角色顯示各操作模組（業務／物流主管／送貨人員／內勤後台）。
-function RouteSchedulerHome() {
-  const navigate = useNavigate();
-  const staff = getAuthedStaff();
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  useEffect(() => {
-    api
-      .getNotifications()
-      .then((list) => setUnreadCount(list.filter((n) => !n.isRead).length))
-      .catch(() => {});
-  }, []);
-
-  return (
-    <div>
-      <div style={{ background: C.navy }} className="px-5 pt-8 pb-10 rounded-b-3xl text-white">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            <button onClick={() => navigate("/")} className="p-1 -ml-1 rounded-full active:bg-white/15">
-              <ArrowLeft size={18} color="#fff" />
-            </button>
-            <div style={{ fontFamily: "Manrope", color: "#9FB0C9" }} className="text-[11px] font-bold tracking-wide">
-              ROUTE SCHEDULER
-            </div>
-          </div>
-          {staff && (
-            <button onClick={() => navigate("/notifications")} className="relative p-1 -mr-1">
-              <Bell size={18} color="#fff" />
-              {unreadCount > 0 && (
-                <span
-                  style={{ background: C.danger }}
-                  className="absolute -top-0.5 -right-0.5 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5"
-                >
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </button>
-          )}
-        </div>
-        <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[22px] font-black leading-tight">
-          路線排程系統
-        </div>
-        <div style={{ color: "#B7C2D6" }} className="text-[12px] mt-1">
-          {staff ? `你好，${staff.name}` : "選擇今日操作身份"}
-        </div>
-      </div>
-      <div className="p-4 -mt-5">
-        {/* 業務模式已移除；物流主管改成主目錄的獨立入口，這裡只留送貨人員 */}
-        <TileGrid>
-          {staff?.roles.includes("DRIVER") && (
-            <Tile
-              icon={Truck}
-              label="送貨人員"
-              sub="今日配送名單"
-              color={C.logiAccent}
-              soft={C.logiAccentSoft}
-              onClick={() => navigate("/logi/driver")}
-            />
-          )}
-        </TileGrid>
-        {/* 內勤後台與物流主管都在主目錄，這裡不再重複顯示 */}
-        {staff && !staff.roles.includes("DRIVER") && (
-          <div style={{ color: C.muted }} className="text-center text-[13px] py-8">
-            這裡只有送貨人員的今日配送名單，你的帳號沒有這個身份。
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+// 原本的「路線排程系統」首頁已移除：業務模式拿掉、物流主管與送貨人員都改成主目錄的
+// 獨立入口後，那一層只剩一個選項，等於白點一下。通知鈴鐺已移到主目錄。
 
 export default function App() {
   return (
@@ -204,14 +158,8 @@ export default function App() {
                   </RequireAuth>
                 }
               />
-              <Route
-                path="/route"
-                element={
-                  <RequireAuth>
-                    <RouteSchedulerHome />
-                  </RequireAuth>
-                }
-              />
+              {/* 舊的 /route 中繼頁已移除；有人從舊書籤或 PWA 捷徑進來就導回主目錄 */}
+              <Route path="/route" element={<Navigate to="/" replace />} />
               <Route
                 path="/inspection"
                 element={
