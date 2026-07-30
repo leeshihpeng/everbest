@@ -4,6 +4,7 @@ import { Truck, Building2, LogOut, Bell, Map, ClipboardCheck, FileText, PackageS
 import type { LucideIcon } from "lucide-react";
 import ManagerSelect from "./pages/logi/manager/ManagerSelect";
 import DriverRoute from "./pages/logi/driver/DriverRoute";
+import BizSetup from "./pages/biz/BizSetup";
 import AdminHome from "./pages/admin/AdminHome";
 import Login from "./pages/Login";
 import Notifications from "./pages/Notifications";
@@ -75,8 +76,9 @@ function MainDirectory() {
   const systems: { key: string; label: string; sub: string; icon: LucideIcon; to: string; color: string; soft: string; show: boolean }[] = [
     { key: "admin", label: "內勤後台", sub: "客戶／人員／派遣單", icon: Building2, to: "/admin", color: C.navy, soft: "#EDEFF2", show: isAdmin },
     { key: "logi", label: "物流主管", sub: "派遣單勾選與指派", icon: Map, to: "/logi/manager", color: C.logiAccent, soft: C.logiAccentSoft, show: canLogiManager },
-    // 直接進今日配送名單。原本要先進「路線排程系統」再點一次，
-    // 業務模式移除後那一層只剩一個選項，等於白點一下，所以拿掉。
+    // 原本是「路線排程系統 → 業務模式 → 勾選客戶」，中間那個 ICON 只是多點一下，
+    // 因此主目錄直接進到勾選客戶的畫面。
+    { key: "biz", label: "路線排程系統", sub: "勾選客戶產生路線", icon: Map, to: "/biz", color: C.bizAccent, soft: C.bizAccentSoft, show: !!staff?.roles.includes("SALES") },
     { key: "driver", label: "送貨人員", sub: "今日配送名單", icon: Truck, to: "/logi/driver", color: C.logiAccent, soft: C.logiAccentSoft, show: !!staff?.roles.includes("DRIVER") },
     { key: "carrier", label: "貨運派遣", sub: "新竹／大榮清點", icon: Truck, to: "/carrier", color: C.logiAccent, soft: C.logiAccentSoft, show: canCarrierDispatch },
     { key: "inspection", label: "檢驗報告", sub: "查詢與管理", icon: ClipboardCheck, to: "/inspection", color: C.bizAccent, soft: C.bizAccentSoft, show: canBizSystems },
@@ -201,7 +203,15 @@ export default function App() {
                   </RequireRole>
                 }
               />
-              {/* 業務模式（/biz）已依需求移除入口與路由；頁面原始碼保留在 pages/biz，要恢復時把這段加回來即可 */}
+              {/* 業務勾選客戶產生路線。主目錄的「路線排程系統」直接進這裡，不再經過中間那層 ICON */}
+              <Route
+                path="/biz"
+                element={
+                  <RequireRole role="SALES">
+                    <BizSetup />
+                  </RequireRole>
+                }
+              />
               <Route
                 path="/logi/manager"
                 element={

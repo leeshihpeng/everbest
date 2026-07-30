@@ -226,7 +226,8 @@ export default function BizSetup() {
   if (step === "setup") {
     return (
       <div>
-        <TopBar title="業務模式" accent={C.bizAccent} onBack={() => navigate("/route")} />
+        {/* 主目錄現在直接進到這一頁（不再經過「業務模式」那層 ICON），返回就回主目錄 */}
+        <TopBar title="路線排程系統" accent={C.bizAccent} onBack={() => navigate("/")} />
         <div className="p-4">
           <div style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.muted }} className="text-[12px] font-bold mb-2">
             出發地
