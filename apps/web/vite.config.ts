@@ -7,6 +7,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      // 註冊改由 src/main.tsx 自己做（要加上定期檢查新版），
+      // 這裡關掉自動注入，避免同一個 Service Worker 被註冊兩次
+      injectRegister: null,
       manifest: {
         name: "路線排程系統",
         short_name: "路線排程",
