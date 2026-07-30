@@ -170,7 +170,7 @@ export default function ShipmentTracking() {
                   key={`${f.region}-${f.carrier}`}
                   icon={f.count > 0 ? Truck : FolderClosed}
                   label={`${f.region} ${f.carrier}`}
-                  sub={`${f.count} 筆託運`}
+                  sub={`今日 ${f.count} 筆`}
                   color={f.carrier === "新竹貨運" ? C.bizAccent : C.gold}
                   soft={f.carrier === "新竹貨運" ? C.bizAccentSoft : C.goldSoft}
                   dimmed={f.count === 0}
@@ -220,8 +220,7 @@ export default function ShipmentTracking() {
             </div>
             <div className="flex items-center justify-between mb-2">
               <span style={{ color: C.muted }} className="text-[12px]">
-                {dateFilter === "all" ? "全部" : dateFilter}・共 {shown.length} 筆・{shown.reduce((s, r) => s + r.pieces, 0)} 件・
-                {shown.reduce((s, r) => s + r.weight, 0)} 公斤
+                {dateFilter === "all" ? "全部" : dateFilter}・共 {shown.length} 筆・{shown.reduce((s, r) => s + r.pieces, 0)} 件
               </span>
               <span style={{ color: C.muted }} className="text-[11px]">
                 保留兩週內報表
@@ -239,8 +238,7 @@ export default function ShipmentTracking() {
                       {date}
                     </span>
                     <span style={{ color: C.muted }} className="text-[11px]">
-                      {dayRows.length} 筆・{dayRows.reduce((s, x) => s + x.pieces, 0)} 件・
-                      {dayRows.reduce((s, x) => s + x.weight, 0)} 公斤
+                      {dayRows.length} 筆・{dayRows.reduce((s, x) => s + x.pieces, 0)} 件
                     </span>
                   </div>
                 )}
@@ -269,18 +267,13 @@ export default function ShipmentTracking() {
                   {r.phone ? `　${r.phone}` : ""}
                 </div>
 
-                {/* 欄位比照各業者原始報表 */}
+                {/* 使用者指定不顯示傳票區分、重量、才數（實務上用不到，欄位太多反而難找重點） */}
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[11px]">
                   <Field label="件數" value={r.pieces} />
-                  <Field label="重量" value={r.weight} />
                   {isHsinchu ? (
-                    <>
-                      {r.voucher && <Field label="傳票區分" value={r.voucher} />}
-                      {r.orderNo && <Field label="訂單編號" value={r.orderNo} />}
-                    </>
+                    r.orderNo && <Field label="訂單編號" value={r.orderNo} />
                   ) : (
                     <>
-                      {r.cbm != null && <Field label="才數" value={r.cbm} />}
                       {r.cod != null && <Field label="代收貨款" value={r.cod} />}
                       {r.orderNo && <Field label="出貨單號" value={r.orderNo} />}
                     </>

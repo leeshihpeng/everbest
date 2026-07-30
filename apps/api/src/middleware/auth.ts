@@ -75,6 +75,23 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
   }
 }
 
+/** 本機自動匯入程式專用的認證：只認 `X-Import-Key`，而且**只開放指定的那一條匯入路徑**。
+ *  這樣監看資料夾的程式不必把任何人的帳號密碼存在電腦上；
+ *  金鑰外洩最多只能匯入檔案，不能查客戶、改人員或刪資料。
+ *  沒設定 IMPORT_API_KEY 就完全不啟用這條路，一律走正常登入驗證。 */
+export function importKeyOrAuth(allowedPath: string) {
+  return (req: AuthedRequest, res: Response, next: NextFunction) => {
+    const expected = process.env.IMPORT_API_KEY;
+    const provided = req.header("x-import-key");
+    const isImportRequest = req.method === "POST" && req.path === allowedPath;
+    if (expected && provided && isImportRequest && provided.length === expected.length && provided === expected) {
+      req.staff = { id: "auto-import", name: "自動匯入", roles: ["ADMIN"] };
+      return next();
+    }
+    return requireAuth(req, res, next);
+  };
+}
+
 /** 限定角色使用，例如 requireRole("MANAGER") 或 requireRole(["ADMIN", "MANAGER"])（符合其中一個即可） */
 export function requireRole(role: string | string[]) {
   const allowed = Array.isArray(role) ? role : [role];

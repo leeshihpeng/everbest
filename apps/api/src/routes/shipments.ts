@@ -1,14 +1,22 @@
 import { Router } from "express";
 import multer from "multer";
 import { PrismaClient } from "@prisma/client";
-import { requireAuth, requireRole, AuthedRequest } from "../middleware/auth";
+import { importKeyOrAuth, requireRole, AuthedRequest } from "../middleware/auth";
 import { parseShipmentPdf, regionOfAddress, UNCLASSIFIED, ParsedShipment } from "../services/shipmentParser";
 
 const prisma = new PrismaClient();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
 export const shipmentsRouter = Router();
 
-shipmentsRouter.use(requireAuth);
+// 本機自動匯入程式用金鑰上傳託運報表；其餘端點一律走正常登入驗證
+shipmentsRouter.use(importKeyOrAuth("/import"));
+
+/** 今天（台灣時間）零點，換算成 UTC。Render 主機跑 UTC，直接用 UTC 零點會差 8 小時。 */
+function startOfTodayTaipei(): Date {
+  const TZ = 8 * 60 * 60 * 1000;
+  const nowTaipei = new Date(Date.now() + TZ);
+  return new Date(Date.UTC(nowTaipei.getUTCFullYear(), nowTaipei.getUTCMonth(), nowTaipei.getUTCDate()) - TZ);
+}
 
 export const ALL_REGIONS = ["北部", "中部", "南部"];
 export const CARRIERS = ["新竹貨運", "大榮貨運"];
@@ -33,10 +41,13 @@ async function allowedRegionsFor(req: AuthedRequest): Promise<string[]> {
 shipmentsRouter.get("/folders", requireRole(["SALES", "MANAGER"]), async (req: AuthedRequest, res, next) => {
   try {
     const allowed = await allowedRegionsFor(req);
+    // 圖示下方的筆數只算「今天出的報表」，資料夾裡仍保留兩週供回查
+    const todayStart = startOfTodayTaipei();
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
     const grouped = await prisma.shipment.groupBy({
       by: ["carrier", "region"],
       _count: { _all: true },
-      where: { region: { in: allowed } },
+      where: { region: { in: allowed }, shipDate: { gte: todayStart, lt: todayEnd } },
     });
     const counts = new Map(grouped.map((g) => [`${g.region}|${g.carrier}`, g._count._all]));
 
@@ -47,11 +58,17 @@ shipmentsRouter.get("/folders", requireRole(["SALES", "MANAGER"]), async (req: A
         folders.push({ region, carrier, count: counts.get(`${region}|${carrier}`) ?? 0 });
       }
     }
-    // 地址判不出區域的（僅最高權限者看得到），另外列出以便處理
+    // 地址判不出區域的（僅最高權限者看得到），另外列出以便處理。
+    // 這裡用「有沒有資料」決定要不要顯示（不限當天），否則前幾天留下來的未分類資料會沒有入口可進去看。
     if (allowed.includes(UNCLASSIFIED)) {
+      const anyUnclassified = await prisma.shipment.groupBy({
+        by: ["carrier"],
+        _count: { _all: true },
+        where: { region: UNCLASSIFIED },
+      });
       for (const carrier of CARRIERS) {
-        const n = counts.get(`${UNCLASSIFIED}|${carrier}`) ?? 0;
-        if (n > 0) folders.push({ region: UNCLASSIFIED, carrier, count: n });
+        const hasAny = anyUnclassified.some((g) => g.carrier === carrier && g._count._all > 0);
+        if (hasAny) folders.push({ region: UNCLASSIFIED, carrier, count: counts.get(`${UNCLASSIFIED}|${carrier}`) ?? 0 });
       }
     }
     res.json(folders);

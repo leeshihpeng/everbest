@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { PrismaClient } from "@prisma/client";
-import { requireAuth, requireRole, AuthedRequest } from "../middleware/auth";
+import { importKeyOrAuth, requireRole, AuthedRequest } from "../middleware/auth";
 import { parseDispatchOrderCsv, groupOrderRowsByCustomer, getCsvHeaders } from "../services/importParser";
 import { geocodeAddress } from "../services/googleMaps";
 import { optimizeRoute } from "../services/routeOptimizer";
@@ -24,22 +24,7 @@ function startOfTodayTaipei(): Date {
   return new Date(midnightTaipei - TAIPEI_OFFSET_MS);
 }
 
-/** 本機自動匯入程式專用的認證：只認 `X-Import-Key`，且**只開放 POST /orders/import**。
- *  這樣監看資料夾的排程程式不必把 ADMIN 帳號密碼存在電腦上；
- *  金鑰外洩的最大影響也僅止於「有人能匯入派遣單」，不能查客戶、改人員或刪資料。
- *  沒設定 IMPORT_API_KEY 就完全不啟用這條路。 */
-function importKeyOrAuth(req: AuthedRequest, res: Parameters<typeof requireAuth>[1], next: Parameters<typeof requireAuth>[2]) {
-  const expected = process.env.IMPORT_API_KEY;
-  const provided = req.header("x-import-key");
-  const isImportRequest = req.method === "POST" && req.path === "/import";
-  if (expected && provided && isImportRequest && provided.length === expected.length && provided === expected) {
-    req.staff = { id: "auto-import", name: "自動匯入", roles: ["ADMIN"] };
-    return next();
-  }
-  return requireAuth(req, res, next);
-}
-
-ordersRouter.use(importKeyOrAuth);
+ordersRouter.use(importKeyOrAuth("/import"));
 
 // 派遣單建立／異動時通知對象：所有物流主管，以及送貨人員——
 // 若已指派特定送貨人員就只通知該人，否則（例如尚未指派）廣播給所有送貨人員

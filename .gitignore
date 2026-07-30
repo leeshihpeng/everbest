@@ -12,6 +12,7 @@ apps/web/.env
 # 自動匯入工具的本機設定與狀態（含金鑰）
 tools/auto-import/.env
 tools/auto-import/state.json
+tools/auto-import/watch.lock
 
 # 本機 SQLite 開發資料庫
 apps/api/prisma/dev.db

@@ -38,21 +38,29 @@ const IMPORT_KEY = env.IMPORT_API_KEY || "";
 const POLL_SECONDS = Number(env.POLL_SECONDS || 60);
 const STATE_PATH = path.join(HERE, "state.json");
 const LOG_PATH = path.join(HERE, "auto-import.log");
+const LOCK_PATH = path.join(HERE, "watch.lock");
 
 if (!IMPORT_KEY) {
   console.error("`.env` 裡的 IMPORT_API_KEY 是空的，請填入與 Render 環境變數相同的金鑰。");
   process.exit(1);
 }
 
-// 資料夾 → 配送方式。與內勤後台的三個分頁一一對應。
-// 路徑走設定檔，換一台電腦（例如搬到工作電腦）只要改 .env，不必動程式。
-const WATCH = [
-  { dir: env.DIR_SELF || String.raw`C:\server\出貨派遣`, carrier: "SELF", label: "派遣單" },
-  { dir: env.DIR_HSINCHU || String.raw`C:\server\新竹貨運`, carrier: "新竹貨運", label: "新竹派遣單" },
-  { dir: env.DIR_DALEN || String.raw`C:\server\大榮貨運`, carrier: "大榮貨運", label: "大榮派遣單" },
-];
+const DIR_SELF = env.DIR_SELF || String.raw`C:\server\出貨派遣`;
+const DIR_HSINCHU = env.DIR_HSINCHU || String.raw`C:\server\新竹貨運`;
+const DIR_DALEN = env.DIR_DALEN || String.raw`C:\server\大榮貨運`;
 
-const IMPORTABLE = /\.(csv|txt)$/i;
+// 監看規則。同一個資料夾可以有兩種用途：
+//   kind=orders    派遣單 CSV（每天覆蓋同一個檔名）→ 內勤後台的派遣單分頁
+//   kind=shipments 託運報表 PDF（放在 202607 之類的年月子資料夾）→ 貨物追蹤
+const WATCH = [
+  { dir: DIR_SELF, kind: "orders", carrier: "SELF", label: "派遣單", match: /\.(csv|txt)$/i, todayOnly: true },
+  { dir: DIR_HSINCHU, kind: "orders", carrier: "新竹貨運", label: "新竹派遣單", match: /\.(csv|txt)$/i, todayOnly: true },
+  { dir: DIR_DALEN, kind: "orders", carrier: "大榮貨運", label: "大榮派遣單", match: /\.(csv|txt)$/i, todayOnly: true },
+  // 託運報表不限當天：報表可能是前幾天出的，只要內容有更新就重新匯入並覆蓋上次版本。
+  // 檔案放在年月子資料夾，所以要往下找。
+  { dir: DIR_HSINCHU, kind: "shipments", label: "新竹貨物追蹤", match: /^pdfsummary.*\.pdf$/i, recursive: true },
+  { dir: DIR_DALEN, kind: "shipments", label: "大榮貨物追蹤", match: /^reportdetails.*\.pdf$/i, recursive: true },
+];
 
 function log(msg) {
   const line = `[${new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}] ${msg}`;
@@ -61,6 +69,38 @@ function log(msg) {
     appendFileSync(LOG_PATH, line + "\n", "utf8");
   } catch {
     // 寫不了日誌不該讓監看停擺
+  }
+}
+
+/** 只允許一個監看程式在跑。登入自動啟動的那個還在背景執行時，
+ *  又手動開一個的話，兩邊會共用同一份狀態檔而互相覆蓋，造成同一個檔案被重覆匯入。 */
+function acquireLock() {
+  const staleAfterMs = Math.max(POLL_SECONDS * 3, 180) * 1000;
+  try {
+    const lock = JSON.parse(readFileSync(LOCK_PATH, "utf8"));
+    const age = Date.now() - Date.parse(lock.heartbeat);
+    let alive = false;
+    try {
+      process.kill(lock.pid, 0); // 只探測程序在不在，不會真的送出訊號
+      alive = true;
+    } catch {
+      alive = false;
+    }
+    if (alive && age < staleAfterMs) {
+      log(`已有另一個監看程式在執行（PID ${lock.pid}），這次不重覆啟動。`);
+      process.exit(0);
+    }
+  } catch {
+    // 沒有鎖檔或內容壞掉，視同沒人在跑
+  }
+  heartbeat();
+}
+
+function heartbeat() {
+  try {
+    writeFileSync(LOCK_PATH, JSON.stringify({ pid: process.pid, heartbeat: new Date().toISOString() }), "utf8");
+  } catch {
+    // 寫不了鎖檔不該讓監看停擺
   }
 }
 
@@ -81,42 +121,84 @@ function isToday(d) {
   return tw(d) === tw(new Date());
 }
 
-async function importFile(filePath, carrier, label) {
-  const buffer = readFileSync(filePath);
-  const form = new FormData();
-  form.append("file", new Blob([buffer]), path.basename(filePath));
-  form.append("carrier", carrier);
-
-  const res = await fetch(`${API_BASE}/orders/import`, {
+async function post(endpoint, form) {
+  const res = await fetch(`${API_BASE}${endpoint}`, {
     method: "POST",
     headers: { "X-Import-Key": IMPORT_KEY },
     body: form,
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`HTTP ${res.status} ${body.error ?? ""}`);
+  return body;
+}
 
+async function importFile(filePath, rule) {
+  const buffer = readFileSync(filePath);
+  const name = path.basename(filePath);
+
+  if (rule.kind === "shipments") {
+    // 貨物追蹤：後端會自動辨識是新竹還是大榮的報表，並覆蓋同一天的舊資料
+    const form = new FormData();
+    form.append("files", new Blob([buffer]), name);
+    const body = await post("/shipments/import", form);
+    const parts = [`匯入 ${body.imported ?? 0}`];
+    if (body.replaced) parts.push(`覆蓋上次 ${body.replaced}`);
+    if (body.purged) parts.push(`清除兩週前 ${body.purged}`);
+    if (body.unclassified) parts.push(`未分類 ${body.unclassified}`);
+    log(`${rule.label} ← ${name}：${parts.join("・")}`);
+    if (body.errors?.length) log(`  ⚠ ${body.errors.join("；")}`);
+    return body;
+  }
+
+  const form = new FormData();
+  form.append("file", new Blob([buffer]), name);
+  form.append("carrier", rule.carrier);
+  const body = await post("/orders/import", form);
   const parts = [`新增 ${body.createdCount ?? 0}`];
   if (body.updatedCount) parts.push(`更新 ${body.updatedCount}`);
   if (body.skippedCount) parts.push(`略過 ${body.skippedCount}（已在作業中）`);
   if (body.purged) parts.push(`清除舊單 ${body.purged}`);
   if (body.noteCount) parts.push(`附註 ${body.noteCount}`);
-  log(`${label} ← ${path.basename(filePath)}：${parts.join("・")}`);
+  log(`${rule.label} ← ${name}：${parts.join("・")}`);
   if (body.errors?.length) log(`  ⚠ ${body.errors.join("；")}`);
   return body;
+}
+
+/** 列出資料夾內符合條件的檔案；recursive 時連年月子資料夾一起找 */
+function listFiles(dir, match, recursive) {
+  const found = [];
+  const walk = (d, depth) => {
+    let entries;
+    try {
+      entries = readdirSync(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const full = path.join(d, e.name);
+      if (e.isDirectory()) {
+        if (recursive && depth < 3) walk(full, depth + 1);
+      } else if (match.test(e.name)) {
+        found.push(full);
+      }
+    }
+  };
+  walk(dir, 0);
+  return found;
 }
 
 // 記住上一輪看到的大小／時間戳，用來判斷檔案是不是還在寫入
 const lastSeen = new Map();
 
 async function scanOnce() {
+  heartbeat();
   const state = loadState();
 
-  for (const { dir, carrier, label } of WATCH) {
-    if (!existsSync(dir)) continue;
+  for (const rule of WATCH) {
+    if (!existsSync(rule.dir)) continue;
 
-    for (const name of readdirSync(dir)) {
-      if (!IMPORTABLE.test(name)) continue;
-      const filePath = path.join(dir, name);
+    for (const filePath of listFiles(rule.dir, rule.match, rule.recursive)) {
+      const name = path.basename(filePath);
 
       let st;
       try {
@@ -125,9 +207,11 @@ async function scanOnce() {
         continue;
       }
       if (!st.isFile() || st.size === 0) continue;
-      if (!isToday(st.mtime)) continue; // 只處理當日更新的檔案
+      // 派遣單每天覆蓋同一個檔名，只處理當日更新的，避免把舊檔又匯一次；
+      // 託運報表則不限日期，只看內容有沒有變。
+      if (rule.todayOnly && !isToday(st.mtime)) continue;
 
-      // 檔案可能正在被 ERP 寫入：大小或時間戳跟上一輪不同就先跳過，下一輪再看
+      // 檔案可能正在被寫入：大小或時間戳跟上一輪不同就先跳過，下一輪再看
       const fingerprint = `${st.size}|${st.mtimeMs}`;
       if (lastSeen.get(filePath) !== fingerprint) {
         lastSeen.set(filePath, fingerprint);
@@ -138,26 +222,40 @@ async function scanOnce() {
       if (state[filePath]?.hash === hash) continue; // 內容和上次匯入的一樣
 
       try {
-        await importFile(filePath, carrier, label);
+        await importFile(filePath, rule);
         state[filePath] = { hash, importedAt: new Date().toISOString() };
         saveState(state);
       } catch (err) {
-        log(`${label} ← ${name}：匯入失敗（${err.message}），下一輪會重試`);
+        log(`${rule.label} ← ${name}：匯入失敗（${err.message}），下一輪會重試`);
       }
     }
   }
 }
 
+acquireLock();
 log(`開始監看（每 ${POLL_SECONDS} 秒掃一次）→ ${API_BASE}`);
 for (const w of WATCH) {
   if (!existsSync(w.dir)) {
     mkdirSync(w.dir, { recursive: true });
     log(`已建立資料夾 ${w.dir}`);
   }
-  log(`  監看 ${w.dir} → ${w.label}`);
+  log(`  監看 ${w.dir}${w.recursive ? "（含子資料夾）" : ""} → ${w.label}`);
 }
 
-await scanOnce();
-setInterval(() => {
-  scanOnce().catch((err) => log(`掃描發生未預期錯誤：${err.message}`));
-}, POLL_SECONDS * 1000);
+// 上一輪還沒跑完就不要再開一輪：上傳 PDF 或 Render 冷啟動可能花上幾十秒，
+// 兩輪重疊會各自讀到還沒更新的狀態檔，同一個檔案就被重覆匯入。
+let scanning = false;
+async function tick() {
+  if (scanning) return;
+  scanning = true;
+  try {
+    await scanOnce();
+  } catch (err) {
+    log(`掃描發生未預期錯誤：${err.message}`);
+  } finally {
+    scanning = false;
+  }
+}
+
+await tick();
+setInterval(tick, POLL_SECONDS * 1000);
