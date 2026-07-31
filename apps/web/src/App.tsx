@@ -15,7 +15,7 @@ import CarrierDispatch from "./pages/logi/CarrierDispatch";
 import QuoteSheetPage from "./pages/QuoteSheetPage";
 import ChangePassword from "./pages/ChangePassword";
 import { getAuthedStaff, isLoggedIn, clearSession, isDriverOnly } from "./lib/auth";
-import { C, TileGrid, Tile } from "./components/common";
+import { C, TileGrid, Tile, headerBg } from "./components/common";
 import { api } from "./api/client";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
@@ -93,7 +93,7 @@ function MainDirectory() {
 
   return (
     <div>
-      <div style={{ background: C.navy }} className="px-5 pt-6 pb-8 rounded-b-3xl text-white">
+      <div style={headerBg(C.navy)} className="px-5 pt-6 pb-8 rounded-b-3xl text-white">
         <div className="flex items-center gap-3">
           {/* 公司 logo 放最左（與加到主畫面的 App 圖示同一張） */}
           <img src="/icon-192.png" alt="三順" width={46} height={46} className="rounded-xl shrink-0" />

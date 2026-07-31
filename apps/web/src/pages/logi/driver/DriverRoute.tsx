@@ -333,14 +333,20 @@ export default function DriverRoute() {
         // 只送貨的人是直接登入到這一頁的，沒有上一層可回；改在右側提供登出。
         // 其他人（例如業務兼司機）是從主目錄直接進來的，返回就回主目錄。
         onBack={driverOnly ? undefined : () => navigate("/")}
+        // 標題列的小圖示按鈕一律撐到 40px 以上，手機上才按得準
         right={
-          <div className="flex items-center gap-1">
-            <button onClick={() => navigate("/notifications")} className="relative p-1">
-              <Bell size={18} />
+          <div className="flex items-center">
+            <button
+              onClick={() => navigate("/notifications")}
+              aria-label="通知"
+              className="relative flex items-center justify-center rounded-full active:bg-white/20"
+              style={{ width: 42, height: 42 }}
+            >
+              <Bell size={19} />
               {unreadCount > 0 && (
                 <span
                   style={{ background: C.danger }}
-                  className="absolute -top-0.5 -right-0.5 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5"
+                  className="absolute top-1 right-1 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5"
                 >
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
@@ -349,17 +355,23 @@ export default function DriverRoute() {
             {/* 只送貨的人看不到主目錄，改密碼的入口只能放這裡 */}
             {driverOnly && (
               <>
-                <button onClick={() => navigate("/password")} className="p-1 text-white/90">
-                  <KeyRound size={16} />
+                <button
+                  onClick={() => navigate("/password")}
+                  aria-label="修改密碼"
+                  className="flex items-center justify-center rounded-full text-white/90 active:bg-white/20"
+                  style={{ width: 42, height: 42 }}
+                >
+                  <KeyRound size={18} />
                 </button>
                 <button
                   onClick={() => {
                     clearSession();
                     navigate("/login");
                   }}
-                  className="flex items-center gap-1 p-1 text-white/90 text-[12px] font-bold"
+                  className="flex items-center gap-1 px-2 text-white/90 text-[12px] font-bold rounded-lg active:bg-white/20"
+                  style={{ height: 42 }}
                 >
-                  <LogOut size={14} /> 登出
+                  <LogOut size={15} /> 登出
                 </button>
               </>
             )}

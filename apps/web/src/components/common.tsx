@@ -22,6 +22,39 @@ export const C = {
   successSoft: "#E4F3E9",
 };
 
+// 標題列的星點網絡底紋（對應設計稿）。座標寫死，才不會每次算出不同的圖案。
+const NETWORK_SVG = encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 160" preserveAspectRatio="xMidYMid slice">` +
+    `<g stroke="rgba(255,255,255,0.16)" stroke-width="0.8" fill="none">` +
+    `<path d="M18 132 L64 96 L120 118 L168 70 L232 92 L286 44 L342 78 L392 40"/>` +
+    `<path d="M8 44 L58 22 L120 52 L182 18 L246 40 L300 14 L366 36"/>` +
+    `<path d="M64 96 L58 22 M120 118 L120 52 M168 70 L182 18 M232 92 L246 40 M286 44 L300 14 M342 78 L366 36"/>` +
+    `<path d="M40 158 L96 140 L150 156 L214 134 L270 152 L330 130 L390 148"/>` +
+    `</g>` +
+    `<g fill="rgba(255,255,255,0.5)">` +
+    `<circle cx="64" cy="96" r="2.2"/><circle cx="120" cy="118" r="1.8"/><circle cx="168" cy="70" r="2.4"/>` +
+    `<circle cx="232" cy="92" r="1.8"/><circle cx="286" cy="44" r="2.2"/><circle cx="342" cy="78" r="1.8"/>` +
+    `<circle cx="58" cy="22" r="1.8"/><circle cx="120" cy="52" r="2.2"/><circle cx="182" cy="18" r="1.8"/>` +
+    `<circle cx="246" cy="40" r="2.4"/><circle cx="300" cy="14" r="1.8"/><circle cx="96" cy="140" r="1.6"/>` +
+    `<circle cx="214" cy="134" r="1.6"/><circle cx="330" cy="130" r="1.6"/>` +
+    `</g></svg>`
+);
+
+/** 深藍標題列的底色：底色 + 星點網絡 + 左上打亮、右下壓暗，做出設計稿的層次感。
+ *  各頁的 accent 不同（深藍／藍／綠），這裡用半透明疊加而不是寫死顏色，換 accent 也能用。 */
+export function headerBg(accent: string) {
+  return {
+    backgroundColor: accent,
+    backgroundImage: [
+      `url("data:image/svg+xml,${NETWORK_SVG}")`,
+      "radial-gradient(120% 140% at 12% 0%, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 55%)",
+      "linear-gradient(160deg, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.22) 100%)",
+    ].join(", "),
+    backgroundSize: "cover, cover, cover",
+    backgroundPosition: "center",
+  } as const;
+}
+
 export function TopBar({
   title,
   accent,
@@ -34,10 +67,16 @@ export function TopBar({
   right?: ReactNode;
 }) {
   return (
-    <div style={{ background: accent, color: "#fff" }} className="flex items-center gap-2 px-4 pt-5 pb-4 rounded-b-2xl shadow-sm">
+    <div style={{ ...headerBg(accent), color: "#fff" }} className="flex items-center gap-1 px-3 pt-5 pb-4 rounded-b-2xl shadow-sm">
       {onBack && (
-        <button onClick={onBack} className="p-1 -ml-1 rounded-full active:bg-white/15">
-          <ArrowLeft size={20} />
+        // 觸控目標至少 44px：原本只有 28px，手機上很容易按不到
+        <button
+          onClick={onBack}
+          aria-label="返回"
+          className="flex items-center justify-center rounded-full shrink-0 active:bg-white/20"
+          style={{ width: 44, height: 44, marginLeft: -6 }}
+        >
+          <ArrowLeft size={22} />
         </button>
       )}
       <div className="flex-1 font-bold text-[16px]" style={{ fontFamily: "'Noto Sans TC', sans-serif" }}>
