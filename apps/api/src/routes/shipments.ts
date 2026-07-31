@@ -41,21 +41,35 @@ async function allowedRegionsFor(req: AuthedRequest): Promise<string[]> {
 shipmentsRouter.get("/folders", requireRole(["SALES", "MANAGER"]), async (req: AuthedRequest, res, next) => {
   try {
     const allowed = await allowedRegionsFor(req);
-    // 圖示下方的筆數只算「今天出的報表」，資料夾裡仍保留兩週供回查
-    const todayStart = startOfTodayTaipei();
-    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+    // 圖示下方只顯示「最新一份報表」的筆數，不把保留兩週的資料全部加總。
+    // 原本寫死「只算今天」，遇到當天還沒出報表時整面都是 0，看起來像系統沒抓到資料，
+    // 所以改成以各業者實際最新的報表日期為準（是今天就等於今天的量）。
+    const latestByCarrier = new Map<string, Date>();
+    for (const carrier of CARRIERS) {
+      const latest = await prisma.shipment.findFirst({
+        where: { carrier },
+        orderBy: { shipDate: "desc" },
+        select: { shipDate: true },
+      });
+      if (latest) latestByCarrier.set(carrier, latest.shipDate);
+    }
+
     const grouped = await prisma.shipment.groupBy({
       by: ["carrier", "region"],
       _count: { _all: true },
-      where: { region: { in: allowed }, shipDate: { gte: todayStart, lt: todayEnd } },
+      where: {
+        region: { in: allowed },
+        OR: [...latestByCarrier.entries()].map(([carrier, shipDate]) => ({ carrier, shipDate })),
+      },
     });
     const counts = new Map(grouped.map((g) => [`${g.region}|${g.carrier}`, g._count._all]));
+    const dateOf = (carrier: string) => latestByCarrier.get(carrier)?.toISOString() ?? null;
 
     const folders = [];
     for (const region of ALL_REGIONS) {
       if (!allowed.includes(region)) continue;
       for (const carrier of CARRIERS) {
-        folders.push({ region, carrier, count: counts.get(`${region}|${carrier}`) ?? 0 });
+        folders.push({ region, carrier, count: counts.get(`${region}|${carrier}`) ?? 0, date: dateOf(carrier) });
       }
     }
     // 地址判不出區域的（僅最高權限者看得到），另外列出以便處理。
@@ -68,7 +82,9 @@ shipmentsRouter.get("/folders", requireRole(["SALES", "MANAGER"]), async (req: A
       });
       for (const carrier of CARRIERS) {
         const hasAny = anyUnclassified.some((g) => g.carrier === carrier && g._count._all > 0);
-        if (hasAny) folders.push({ region: UNCLASSIFIED, carrier, count: counts.get(`${UNCLASSIFIED}|${carrier}`) ?? 0 });
+        if (hasAny) {
+          folders.push({ region: UNCLASSIFIED, carrier, count: counts.get(`${UNCLASSIFIED}|${carrier}`) ?? 0, date: dateOf(carrier) });
+        }
       }
     }
     res.json(folders);

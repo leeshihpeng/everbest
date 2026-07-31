@@ -240,7 +240,8 @@ export const api = {
     );
   },
   deletePermit: (id: string) => request<void>(`/permits/${id}`, { method: "DELETE" }),
-  getShipmentFolders: () => request<{ region: string; carrier: string; count: number }[]>("/shipments/folders"),
+  getShipmentFolders: () =>
+    request<{ region: string; carrier: string; count: number; date: string | null }[]>("/shipments/folders"),
   getShipments: (carrier: string, region: string) =>
     request<ShipmentRow[]>(`/shipments?carrier=${encodeURIComponent(carrier)}&region=${encodeURIComponent(region)}`),
   importShipments: (files: File[]) => {

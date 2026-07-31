@@ -9,6 +9,16 @@ interface Folder {
   region: string;
   carrier: string;
   count: number;
+  date: string | null; // 該業者最新一份報表的日期
+}
+
+/** 圖示下方的說明：最新報表是今天就寫「今日」，否則標出實際日期，
+ *  才不會在當天還沒出報表時看起來像沒有資料。 */
+function folderSub(f: Folder): string {
+  if (!f.date) return "尚無報表";
+  const d = fmtDate(f.date).slice(5); // MM/DD
+  const today = fmtDate(new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()).slice(5);
+  return `${d === today ? "今日" : d} ${f.count} 筆`;
 }
 
 function fmtDate(iso: string): string {
@@ -171,7 +181,7 @@ export default function ShipmentTracking() {
                   icon={f.count > 0 ? Truck : FolderClosed}
                   image="/tiles/tracking.png"
                   label={`${f.region} ${f.carrier}`}
-                  sub={`今日 ${f.count} 筆`}
+                  sub={folderSub(f)}
                   color={f.carrier === "新竹貨運" ? C.bizAccent : C.gold}
                   soft={f.carrier === "新竹貨運" ? C.bizAccentSoft : C.goldSoft}
                   dimmed={f.count === 0}

@@ -46,7 +46,9 @@ export default function Login() {
           </div>
         </div>
       </div>
-      <form onSubmit={handleSubmit} className="p-4 -mt-5">
+      {/* 原本用負邊距讓表單卡片往上疊在標題上，標題加了 logo 之後會壓到「請登入」，
+          改成接在標題下方 */}
+      <form onSubmit={handleSubmit} className="p-4 pt-3">
         <div className="rounded-2xl p-4 shadow-sm" style={{ background: "#fff" }}>
           <label style={{ color: C.muted, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[12px] font-bold block mb-1">
             姓名
