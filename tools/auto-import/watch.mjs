@@ -1,10 +1,10 @@
-// 三順派遣單自動匯入 — 在公司這台 Windows 電腦上常駐執行。
+// 三順自動匯入（派遣單 + 貨物追蹤託運報表）— 在公司電腦上常駐執行。
 //
 // 為什麼要有這支程式：後端跑在 Render 雲端，讀不到 C:\server 底下的檔案，
 // 所以必須由本機程式監看資料夾、主動把檔案送上去。
 //
 // 行為：
-//   每 POLL_SECONDS 秒掃一次三個資料夾，找出「今天有更新」的 CSV／TXT。
+//   每 POLL_SECONDS 秒掃一次資料夾，找出派遣單 CSV 與託運報表 PDF。
 //   檔案內容的 SHA-256 與上次匯入的不同才會上傳（ERP 覆蓋同一個檔名也認得出來）。
 //   檔案還在寫入時（大小或時間戳還在變）會等下一輪再處理，避免匯入到半截的檔案。
 //   後端以「配送方式＋送貨日期＋客戶代號」判斷同一張派遣單，重覆送不會產生重複資料。
@@ -17,6 +17,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+// 版本字串會寫進日誌。搬到別台電腦時若忘了更新程式，
+// 看日誌第一行就能確認那台跑的是哪一版（例如貨物追蹤是 2026-07-30 之後才加的）。
+const VERSION = "2026-07-31（派遣單 + 貨物追蹤）";
 
 function loadEnv() {
   const envPath = path.join(HERE, ".env");
@@ -233,13 +237,16 @@ async function scanOnce() {
 }
 
 acquireLock();
-log(`開始監看（每 ${POLL_SECONDS} 秒掃一次）→ ${API_BASE}`);
+log(`開始監看 v${VERSION}（每 ${POLL_SECONDS} 秒掃一次）→ ${API_BASE}`);
 for (const w of WATCH) {
   if (!existsSync(w.dir)) {
     mkdirSync(w.dir, { recursive: true });
     log(`已建立資料夾 ${w.dir}`);
   }
-  log(`  監看 ${w.dir}${w.recursive ? "（含子資料夾）" : ""} → ${w.label}`);
+  // 一併印出目前掃到幾個符合的檔案：若貨物追蹤顯示 0 個，
+  // 就知道是檔名或路徑不對，而不是程式沒跑
+  const n = listFiles(w.dir, w.match, w.recursive).length;
+  log(`  監看 ${w.dir}${w.recursive ? "（含子資料夾）" : ""} → ${w.label}：目前符合的檔案 ${n} 個`);
 }
 
 // 上一輪還沒跑完就不要再開一輪：上傳 PDF 或 Render 冷啟動可能花上幾十秒，
