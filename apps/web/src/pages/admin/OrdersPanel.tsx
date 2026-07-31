@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { getAuthedStaff } from "../../lib/auth";
 import { dispatchCityOf, dispatchCityIndex } from "../../lib/taiwanCities";
-import { C, Checkbox, ProductSummary, QtySubtotal, sumQty } from "../../components/common";
+import { C, Checkbox, ProductSummary, QtySubtotal, sumQty, DispatchDateTag } from "../../components/common";
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "待處理",
@@ -26,6 +26,7 @@ interface Order {
   assignedDriverId?: string | null;
   lat?: number | null;
   orderNote?: string | null;
+  createdAt?: string; // 派遣單匯入（檔案上傳）的時間
   items: OrderItem[];
 }
 
@@ -302,6 +303,7 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
                       {o.customerCode}
                     </span>
                     <span className="font-semibold text-[13px]">{o.customerName}</span>
+                    <DispatchDateTag createdAt={o.createdAt} />
                     {isSelf && o.lat == null && (
                       <span style={{ color: C.danger }} className="text-[10px]">
                         未定位

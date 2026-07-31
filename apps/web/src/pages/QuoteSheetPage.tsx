@@ -87,7 +87,7 @@ export default function QuoteSheetPage() {
 
   return (
     <div>
-      <TopBar title="產品報價單" accent={C.navy} onBack={() => navigate("/")} />
+      <TopBar title="產品報價單" accent={C.header} onBack={() => navigate("/")} />
       <div className="p-4">
         {canUpload && (
           <div className="rounded-xl p-3 mb-3" style={{ background: "#fff", border: `1px solid ${C.hairline}` }}>

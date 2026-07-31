@@ -43,7 +43,7 @@ export default function ChangePassword({ forced = false }: { forced?: boolean })
   if (done) {
     return (
       <div>
-        <TopBar title="修改密碼" accent={C.navy} onBack={() => navigate("/")} />
+        <TopBar title="修改密碼" accent={C.header} onBack={() => navigate("/")} />
         <div className="p-4">
           <div className="rounded-xl p-4 text-[13px]" style={{ background: C.logiAccentSoft, color: C.logiAccent }}>
             密碼已更新。下次登入請用新密碼。
@@ -62,7 +62,7 @@ export default function ChangePassword({ forced = false }: { forced?: boolean })
 
   return (
     <div>
-      {!forced && <TopBar title="修改密碼" accent={C.navy} onBack={() => navigate("/")} />}
+      {!forced && <TopBar title="修改密碼" accent={C.header} onBack={() => navigate("/")} />}
       <div className="p-4">
         {forced && (
           <div className="rounded-xl p-3 mb-3 text-[13px]" style={{ background: C.goldSoft, color: C.gold }}>

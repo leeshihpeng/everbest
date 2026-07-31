@@ -15,7 +15,7 @@ export default function AdminHome() {
   return (
     <div>
       {/* 內勤後台已移到主目錄，返回時回主目錄而非路線排程首頁 */}
-      <TopBar title="內勤後台" accent={C.navy} onBack={() => navigate("/")} />
+      <TopBar title="內勤後台" accent={C.header} onBack={() => navigate("/")} />
       <div className="px-4 pt-3 flex gap-2 flex-wrap">
         {(
           [

@@ -213,7 +213,7 @@ export default function InspectionReports() {
     <div>
       <TopBar
         title={selectedYear ? `${selectedYear}檢驗報告` : "檢驗報告"}
-        accent={C.navy}
+        accent={C.header}
         onBack={() => (selectedYear ? backToYears() : navigate("/"))}
       />
       <div className="p-4">
@@ -274,6 +274,7 @@ export default function InspectionReports() {
                 <Tile
                   key={y.year}
                   icon={FolderClosed}
+                  image="/tiles/inspection.png"
                   label={`${y.year}檢驗報告`}
                   sub={`${y.count} 份報告`}
                   color={C.bizAccent}

@@ -29,7 +29,7 @@ export default function Login() {
 
   return (
     <div className="p-4">
-      <div style={headerBg(C.navy)} className="px-5 pt-8 pb-10 rounded-b-3xl text-white">
+      <div style={headerBg(C.header)} className="px-5 pt-8 pb-10 rounded-b-3xl text-white">
         <div className="flex items-center gap-3">
           {/* 公司 logo 放最左，與主目錄一致 */}
           <img src="/icon-192.png" alt="三順" width={52} height={52} className="rounded-xl shrink-0" />

@@ -6,6 +6,9 @@ export const C = {
   bg: "#F2F4F7",
   surface: "#FFFFFF",
   navy: "#1C2B45",
+  // 所有畫面的標題列統一用這個藍（原本深藍與綠色混用，看起來不像同一套系統）。
+  // 比 navy 淡、又還撐得住白字（對比約 5:1）。
+  header: "#3E6BB5",
   navyLight: "#2E4266",
   hairline: "#E3E6EB",
   text: "#1A1F29",
@@ -151,6 +154,28 @@ export function Tile({
         </div>
       )}
     </button>
+  );
+}
+
+/** 派遣日期＝派遣單匯入（檔案上傳）的日期，顯示成 MM/DD。
+ *  用台灣時間換算，否則 UTC 會讓清晨匯入的單子顯示成前一天。 */
+export function dispatchDate(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(new Date(iso).getTime() + 8 * 60 * 60 * 1000);
+  return `${String(d.getUTCMonth() + 1).padStart(2, "0")}/${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+/** 客戶名稱旁的派遣日期標籤 */
+export function DispatchDateTag({ createdAt }: { createdAt?: string | null }) {
+  const text = dispatchDate(createdAt);
+  if (!text) return null;
+  return (
+    <span
+      style={{ background: C.bg, color: C.muted, fontFamily: "Manrope" }}
+      className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0"
+    >
+      派遣 {text}
+    </span>
   );
 }
 
@@ -318,6 +343,7 @@ export interface TimelineStop {
   legDurationMin?: number;
   products?: TimelineProduct[];
   note?: string; // 貨單附註（CSV 匯入時帶進來的交代事項）
+  createdAt?: string; // 派遣日期（檔案上傳時間），顯示在客戶名稱旁
   // 有傳才顯示上下移動按鈕（送貨人員自行調整送貨順序）；已在頭尾的站別傳 undefined
   onMoveUp?: () => void;
   onMoveDown?: () => void;
@@ -544,8 +570,11 @@ export function RouteTimeline({
               {n.kind === "stop" ? (
                 <>
                   <div className="flex items-center justify-between gap-2">
-                    <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[14px]">
-                      {n.data.name}
+                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                      <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[14px]">
+                        {n.data.name}
+                      </span>
+                      <DispatchDateTag createdAt={n.data.createdAt} />
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {n.data.isPriority && <PriorityTag />}

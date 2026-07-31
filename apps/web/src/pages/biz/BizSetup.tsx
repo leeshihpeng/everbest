@@ -227,7 +227,7 @@ export default function BizSetup() {
     return (
       <div>
         {/* 主目錄現在直接進到這一頁（不再經過「業務模式」那層 ICON），返回就回主目錄 */}
-        <TopBar title="路線排程系統" accent={C.bizAccent} onBack={() => navigate("/")} />
+        <TopBar title="路線排程系統" accent={C.header} onBack={() => navigate("/")} />
         <div className="p-4">
           <div style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.muted }} className="text-[12px] font-bold mb-2">
             出發地
@@ -254,7 +254,7 @@ export default function BizSetup() {
   if (step === "select") {
     return (
       <div>
-        <TopBar title="勾選今日客戶" accent={C.bizAccent} onBack={() => setStep("setup")} />
+        <TopBar title="勾選今日客戶" accent={C.header} onBack={() => setStep("setup")} />
         <div className="px-4 pt-3 pb-2">
           <div className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: "#fff", border: `1px solid ${C.hairline}` }}>
             <Search size={15} color={C.muted} />
@@ -400,7 +400,7 @@ export default function BizSetup() {
 
   return (
     <div>
-      <TopBar title="路線結果" accent={C.bizAccent} onBack={() => setStep("select")} />
+      <TopBar title="路線結果" accent={C.header} onBack={() => setStep("select")} />
       <div className="p-4">
         {routeLoading && <div className="text-center text-[13px] py-8" style={{ color: C.muted }}>路線計算中…</div>}
         {routeError && <div className="text-center text-[13px] py-4" style={{ color: C.danger }}>{routeError}</div>}

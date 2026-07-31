@@ -165,7 +165,7 @@ export default function ImportPermits() {
     <div>
       <TopBar
         title={selected ?? "輸入許可證"}
-        accent={C.navy}
+        accent={C.header}
         onBack={() => (selected ? backToCategories() : navigate("/"))}
       />
       <div className="p-4">
@@ -215,6 +215,7 @@ export default function ImportPermits() {
                 <Tile
                   key={c.category}
                   icon={FolderClosed}
+                  image="/tiles/permit.png"
                   label={c.category}
                   sub={`${c.count} 份`}
                   color={C.gold}

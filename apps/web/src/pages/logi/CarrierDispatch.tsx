@@ -125,7 +125,7 @@ export default function CarrierDispatch() {
     <div>
       <TopBar
         title={carrier ? `貨運派遣 — ${carrier}` : "貨運派遣"}
-        accent={C.logiAccent}
+        accent={C.header}
         onBack={() => (carrier ? back() : navigate("/"))}
       />
       <div className="p-4">
@@ -145,6 +145,7 @@ export default function CarrierDispatch() {
               <Tile
                 key={c}
                 icon={Truck}
+                image="/tiles/carrier.png"
                 label={c}
                 sub={`待出貨 ${counts[c] ?? 0} 筆`}
                 color={C.logiAccent}

@@ -120,7 +120,7 @@ export default function ShipmentTracking() {
     <div>
       <TopBar
         title={selected ? `${selected.region} ${selected.carrier}` : "貨物追蹤"}
-        accent={C.navy}
+        accent={C.header}
         onBack={() => (selected ? back() : navigate("/"))}
       />
       <div className="p-4">
@@ -169,6 +169,7 @@ export default function ShipmentTracking() {
                 <Tile
                   key={`${f.region}-${f.carrier}`}
                   icon={f.count > 0 ? Truck : FolderClosed}
+                  image="/tiles/tracking.png"
                   label={`${f.region} ${f.carrier}`}
                   sub={`今日 ${f.count} 筆`}
                   color={f.carrier === "新竹貨運" ? C.bizAccent : C.gold}

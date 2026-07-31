@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Bell, Check, LogOut, KeyRound, RotateCcw, HelpCircle, ChevronUp, ChevronDown } from "lucide-react";
 import { api } from "../../../api/client";
 import { getAuthedStaff, isDriverOnly, clearSession } from "../../../lib/auth";
-import { C, TopBar, Pill, RouteTimeline, ActionRow, TimelineRoute, ProductSummary } from "../../../components/common";
+import { C, TopBar, Pill, RouteTimeline, ActionRow, TimelineRoute, ProductSummary, DispatchDateTag } from "../../../components/common";
 import { buildNavigationUrl } from "../../../lib/googleMapsLoader";
 import { formatRouteShareText, shareRouteText } from "../../../lib/routeShare";
 
@@ -26,6 +26,7 @@ interface Order {
   items: OrderItem[];
   status: string;
   orderNote?: string | null;
+  createdAt?: string; // 派遣單匯入（檔案上傳）的時間
   routeSequence?: number | null;
   routeOrderManual?: boolean;
 }
@@ -190,6 +191,7 @@ export default function DriverRoute() {
               legDistanceKm: leg.legDistanceKm,
               legDurationMin: leg.legDurationMin,
               note: o.orderNote ?? undefined,
+              createdAt: o.createdAt,
               products: o.items.map((i) => ({ name: i.productName, qty: i.quantity })),
             };
           }),
@@ -329,7 +331,7 @@ export default function DriverRoute() {
     <div>
       <TopBar
         title="今日配送名單（送貨人員）"
-        accent={C.logiAccent}
+        accent={C.header}
         // 只送貨的人是直接登入到這一頁的，沒有上一層可回；改在右側提供登出。
         // 其他人（例如業務兼司機）是從主目錄直接進來的，返回就回主目錄。
         onBack={driverOnly ? undefined : () => navigate("/")}
@@ -472,6 +474,7 @@ export default function DriverRoute() {
             >
               {o.customerName}
             </span>
+            <DispatchDateTag createdAt={o.createdAt} />
             <span style={{ color: completed.has(o.id) ? C.logiAccent : C.muted, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[11px] font-bold">
               {completed.has(o.id) ? "已完成" : "待完成"}
             </span>

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 import { api } from "../../../api/client";
 import OrdersPanel from "../../admin/OrdersPanel";
-import { C, TopBar, Checkbox, RouteTimeline, TimelineRoute, ProductSummary, QtySubtotal } from "../../../components/common";
+import { C, TopBar, Checkbox, RouteTimeline, TimelineRoute, ProductSummary, QtySubtotal, DispatchDateTag } from "../../../components/common";
 import { dispatchCityOf, dispatchCityIndex } from "../../../lib/taiwanCities";
 import { getAuthedStaff } from "../../../lib/auth";
 
@@ -18,6 +18,7 @@ interface Order {
   customerName: string;
   address: string;
   orderNote?: string | null;
+  createdAt?: string; // 派遣單匯入（檔案上傳）的時間
   items: OrderItem[];
 }
 
@@ -161,7 +162,7 @@ export default function ManagerSelect() {
   if (route) {
     return (
       <div>
-        <TopBar title="已送出配送指派" accent={C.logiAccent} onBack={() => navigate("/route")} />
+        <TopBar title="已送出配送指派" accent={C.header} onBack={() => navigate("/")} />
         <div className="p-4">
           <div className="rounded-xl p-3 mb-4 flex items-start gap-2" style={{ background: C.logiAccentSoft }}>
             <CheckCircle2 size={18} color={C.logiAccent} className="mt-0.5" />
@@ -220,7 +221,7 @@ export default function ManagerSelect() {
   if (tab === "manage") {
     return (
       <div>
-        <TopBar title={canEdit ? "派遣單管理（物流主管）" : "全部派遣單（檢視）"} accent={C.logiAccent} onBack={() => navigate("/route")} />
+        <TopBar title={canEdit ? "派遣單管理（物流主管）" : "全部派遣單（檢視）"} accent={C.header} onBack={() => navigate("/")} />
         {tabBar}
         <OrdersPanel allowImport={false} />
       </div>
@@ -229,7 +230,7 @@ export default function ManagerSelect() {
 
   return (
     <div>
-      <TopBar title={canEdit ? "派遣單勾選（物流主管）" : "待處理派遣單（檢視）"} accent={C.logiAccent} onBack={() => navigate("/route")} />
+      <TopBar title={canEdit ? "派遣單勾選（物流主管）" : "待處理派遣單（檢視）"} accent={C.header} onBack={() => navigate("/")} />
       {tabBar}
       {canEdit && drivers.length > 0 && (
         <div className="px-4 pt-3 pb-2">
@@ -310,6 +311,7 @@ export default function ManagerSelect() {
                           <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-semibold text-[13px]">
                             {o.customerName}
                           </span>
+                          <DispatchDateTag createdAt={o.createdAt} />
                         </div>
                         <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
                           {o.address}
