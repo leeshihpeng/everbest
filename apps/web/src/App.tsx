@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate } from "react-router-dom";
-import { Truck, Building2, LogOut, Bell, Map, ClipboardCheck, FileText, PackageSearch, Tags, KeyRound } from "lucide-react";
+import { Truck, Building2, LogOut, Bell, Map, ClipboardCheck, FileText, PackageSearch, Tags, KeyRound, Home } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import ManagerSelect from "./pages/logi/manager/ManagerSelect";
 import DriverRoute from "./pages/logi/driver/DriverRoute";
@@ -72,71 +72,105 @@ function MainDirectory() {
     navigate("/login");
   }
 
-  // 兩欄磁磚放不下長句，說明一律縮短成一個短詞
-  const systems: { key: string; label: string; sub: string; icon: LucideIcon; to: string; color: string; soft: string; show: boolean }[] = [
-    { key: "admin", label: "內勤後台", sub: "客戶／人員／派遣單", icon: Building2, to: "/admin", color: C.navy, soft: "#EDEFF2", show: isAdmin },
-    { key: "logi", label: "物流主管", sub: "派遣單勾選與指派", icon: Map, to: "/logi/manager", color: C.logiAccent, soft: C.logiAccentSoft, show: canLogiManager },
+  // 兩欄磁磚放不下長句，說明一律縮短成一個短詞。
+  // image 是設計稿裁下來的插畫圖示（scripts/slice-tile-icons.mjs 產生）。
+  const systems: {
+    key: string; label: string; sub: string; icon: LucideIcon; image?: string;
+    to: string; color: string; soft: string; show: boolean;
+  }[] = [
+    { key: "admin", label: "內勤後台", sub: "客戶／人員／派遣單", icon: Building2, image: "/tiles/admin.png", to: "/admin", color: C.navy, soft: "#EDEFF2", show: isAdmin },
+    { key: "logi", label: "物流主管", sub: "派遣單勾選與指派", icon: Map, image: "/tiles/logi.png", to: "/logi/manager", color: C.logiAccent, soft: C.logiAccentSoft, show: canLogiManager },
     // 原本是「路線排程系統 → 業務模式 → 勾選客戶」，中間那個 ICON 只是多點一下，
     // 因此主目錄直接進到勾選客戶的畫面。
-    { key: "biz", label: "路線排程系統", sub: "勾選客戶產生路線", icon: Map, to: "/biz", color: C.bizAccent, soft: C.bizAccentSoft, show: !!staff?.roles.includes("SALES") },
-    { key: "driver", label: "送貨人員", sub: "今日配送名單", icon: Truck, to: "/logi/driver", color: C.logiAccent, soft: C.logiAccentSoft, show: !!staff?.roles.includes("DRIVER") },
-    { key: "carrier", label: "貨運派遣", sub: "新竹／大榮清點", icon: Truck, to: "/carrier", color: C.logiAccent, soft: C.logiAccentSoft, show: canCarrierDispatch },
-    { key: "inspection", label: "檢驗報告", sub: "查詢與管理", icon: ClipboardCheck, to: "/inspection", color: C.bizAccent, soft: C.bizAccentSoft, show: canBizSystems },
-    { key: "permit", label: "輸入許可證", sub: "進口許可證", icon: FileText, to: "/permit", color: C.gold, soft: C.goldSoft, show: canBizSystems },
-    { key: "tracking", label: "貨運追蹤", sub: "出貨狀態追蹤", icon: PackageSearch, to: "/tracking", color: C.navy, soft: "#EDEFF2", show: canBizSystems },
-    { key: "quote", label: "產品報價單", sub: "規格與價格", icon: Tags, to: "/quote", color: C.logiAccent, soft: C.logiAccentSoft, show: canBizSystems },
+    { key: "biz", label: "路線排程系統", sub: "勾選客戶產生路線", icon: Map, image: "/tiles/biz.png", to: "/biz", color: C.bizAccent, soft: C.bizAccentSoft, show: !!staff?.roles.includes("SALES") },
+    { key: "driver", label: "送貨人員", sub: "今日配送名單", icon: Truck, image: "/tiles/carrier.png", to: "/logi/driver", color: C.logiAccent, soft: C.logiAccentSoft, show: !!staff?.roles.includes("DRIVER") },
+    { key: "carrier", label: "貨運派遣", sub: "新竹／大榮清點", icon: Truck, image: "/tiles/carrier.png", to: "/carrier", color: C.logiAccent, soft: C.logiAccentSoft, show: canCarrierDispatch },
+    { key: "inspection", label: "檢驗報告", sub: "查詢與管理", icon: ClipboardCheck, image: "/tiles/inspection.png", to: "/inspection", color: C.bizAccent, soft: C.bizAccentSoft, show: canBizSystems },
+    { key: "permit", label: "輸入許可證", sub: "進口許可證", icon: FileText, image: "/tiles/permit.png", to: "/permit", color: C.gold, soft: C.goldSoft, show: canBizSystems },
+    { key: "tracking", label: "貨運追蹤", sub: "出貨狀態追蹤", icon: PackageSearch, image: "/tiles/tracking.png", to: "/tracking", color: C.navy, soft: "#EDEFF2", show: canBizSystems },
+    { key: "quote", label: "產品報價單", sub: "規格與價格", icon: Tags, image: "/tiles/quote.png", to: "/quote", color: C.logiAccent, soft: C.logiAccentSoft, show: canBizSystems },
   ];
 
   return (
     <div>
       <div style={{ background: C.navy }} className="px-5 pt-6 pb-8 rounded-b-3xl text-white">
         <div className="flex items-center gap-3">
+          {/* 公司 logo 放最左（與加到主畫面的 App 圖示同一張） */}
+          <img src="/icon-192.png" alt="三順" width={46} height={46} className="rounded-xl shrink-0" />
           <div className="flex-1 min-w-0">
-            <div style={{ fontFamily: "Manrope", color: "#9FB0C9" }} className="text-[11px] font-bold tracking-wide mb-1">
+            <div style={{ fontFamily: "Manrope", color: "#9FB0C9" }} className="text-[11px] font-bold tracking-wide mb-0.5">
               SANSOON PORTAL
             </div>
             <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[22px] font-black leading-tight">
               三順 主目錄
             </div>
           </div>
-          {/* 公司 logo（與加到主畫面的 App 圖示同一張） */}
-          <img src="/icon-192.png" alt="三順" width={46} height={46} className="rounded-xl shrink-0" />
         </div>
-        <div style={{ color: "#B7C2D6" }} className="text-[12px] mt-1 flex items-center justify-between">
-          <span>{staff ? `你好，${staff.name}` : ""}</span>
-          {staff && (
-            <div className="flex items-center gap-3">
-              <button onClick={() => navigate("/notifications")} className="relative flex items-center gap-1 text-white/80">
-                <Bell size={12} /> 通知
-                {unreadCount > 0 && (
-                  <span
-                    style={{ background: C.danger }}
-                    className="absolute -top-1.5 -right-2 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5"
-                  >
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </span>
-                )}
-              </button>
-              <Link to="/password" className="flex items-center gap-1 text-white/80">
-                <KeyRound size={12} /> 修改密碼
-              </Link>
-              <button onClick={handleLogout} className="flex items-center gap-1 text-white/80">
-                <LogOut size={12} /> 登出
-              </button>
-            </div>
-          )}
+        <div style={{ color: "#B7C2D6" }} className="text-[12px] mt-2">
+          {staff ? `你好，${staff.name}` : ""}
         </div>
       </div>
-      {/* 原本用負邊距讓磁磚往上疊在藍色標題上，會把標題底部蓋掉；改成接在標題下方 */}
-      <div className="p-4 pt-3">
+      {/* 原本用負邊距讓磁磚往上疊在藍色標題上，會把標題底部蓋掉；改成接在標題下方。
+          底部留空間給導覽列，磁磚才不會被蓋住。 */}
+      <div className="p-4 pt-3 pb-20">
         <TileGrid>
           {systems
             .filter((s) => s.show)
             .map((s) => (
-              <Tile key={s.key} icon={s.icon} label={s.label} sub={s.sub} color={s.color} soft={s.soft} onClick={() => navigate(s.to)} />
+              <Tile
+                key={s.key}
+                icon={s.icon}
+                image={s.image}
+                label={s.label}
+                sub={s.sub}
+                color={s.color}
+                soft={s.soft}
+                onClick={() => navigate(s.to)}
+              />
             ))}
         </TileGrid>
       </div>
+      <BottomNav unreadCount={unreadCount} onLogout={handleLogout} />
+    </div>
+  );
+}
+
+/** 底部導覽列：常用動作放在拇指構得到的位置（首頁／通知／修改密碼／登出）。
+ *  這些原本擠在標題列的小字裡，手機上不好按。 */
+function BottomNav({ unreadCount, onLogout }: { unreadCount: number; onLogout: () => void }) {
+  const navigate = useNavigate();
+  const items: { key: string; label: string; icon: LucideIcon; badge?: number; onClick: () => void }[] = [
+    { key: "home", label: "首頁", icon: Home, onClick: () => navigate("/") },
+    { key: "bell", label: "通知", icon: Bell, badge: unreadCount, onClick: () => navigate("/notifications") },
+    { key: "key", label: "修改密碼", icon: KeyRound, onClick: () => navigate("/password") },
+    { key: "out", label: "登出", icon: LogOut, onClick: onLogout },
+  ];
+  return (
+    <div
+      className="absolute bottom-0 left-0 right-0 flex items-stretch"
+      style={{ background: "#fff", borderTop: `1px solid ${C.hairline}` }}
+    >
+      {items.map((it) => {
+        const Icon = it.icon;
+        return (
+          <button key={it.key} onClick={it.onClick} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 active:opacity-70">
+            <span className="relative">
+              <Icon size={20} color={C.navy} />
+              {!!it.badge && it.badge > 0 && (
+                <span
+                  style={{ background: C.danger }}
+                  className="absolute -top-1 -right-2 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5"
+                >
+                  {it.badge > 9 ? "9+" : it.badge}
+                </span>
+              )}
+            </span>
+            <span style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.muted }} className="text-[10px] font-bold">
+              {it.label}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

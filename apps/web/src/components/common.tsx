@@ -57,6 +57,7 @@ export function TileGrid({ children, cols = 2 }: { children: ReactNode; cols?: 2
 
 export function Tile({
   icon: Icon,
+  image,
   label,
   sub,
   color,
@@ -66,6 +67,8 @@ export function Tile({
   compact,
 }: {
   icon: LucideIcon;
+  /** 有傳就用這張插畫取代線條圖示（設計稿的磁磚圖示，放在 public/tiles/） */
+  image?: string;
   label: string;
   sub?: string;
   color: string;
@@ -82,12 +85,21 @@ export function Tile({
       className="flex flex-col items-center justify-start text-center rounded-2xl px-2 pt-2.5 pb-2 shadow-sm active:opacity-80"
       style={{ background: "#fff", minHeight: compact ? 84 : 92 }}
     >
-      <div
-        className="rounded-2xl flex items-center justify-center shrink-0 mb-1"
-        style={{ width: compact ? 36 : 40, height: compact ? 36 : 40, background: dimmed ? C.bg : soft }}
-      >
-        <Icon size={compact ? 18 : 21} color={dimmed ? C.muted : color} />
-      </div>
+      {image ? (
+        <img
+          src={image}
+          alt=""
+          className="rounded-xl shrink-0 mb-1 object-contain"
+          style={{ width: compact ? 40 : 46, height: compact ? 40 : 46, opacity: dimmed ? 0.45 : 1 }}
+        />
+      ) : (
+        <div
+          className="rounded-2xl flex items-center justify-center shrink-0 mb-1"
+          style={{ width: compact ? 36 : 40, height: compact ? 36 : 40, background: dimmed ? C.bg : soft }}
+        >
+          <Icon size={compact ? 18 : 21} color={dimmed ? C.muted : color} />
+        </div>
+      )}
       <div
         style={{ fontFamily: "'Noto Sans TC', sans-serif" }}
         className={`font-bold leading-tight ${compact ? "text-[11px]" : "text-[13px]"}`}
