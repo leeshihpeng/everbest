@@ -76,23 +76,28 @@ function MainDirectory() {
 
   return (
     <div>
-      <div style={headerBg(C.header)} className="px-5 pt-6 pb-8 rounded-b-3xl text-white">
-        <div className="flex items-start gap-3">
+      {/* 標題列壓低高度：右側三顆動作鈕會吃掉寬度，標題字級太大就會換行，
+          所以字級縮小並強制不換行，問候語也併到同一區塊 */}
+      <div style={headerBg(C.header)} className="px-4 pt-4 pb-5 rounded-b-3xl text-white">
+        <div className="flex items-center gap-2.5">
           {/* 公司 logo 放最左（與加到主畫面的 App 圖示同一張） */}
-          <img src="/icon-192.png" alt="三順" width={46} height={46} className="rounded-xl shrink-0" />
+          <img src="/icon-192.png" alt="三順" width={38} height={38} className="rounded-lg shrink-0" />
           <div className="flex-1 min-w-0">
-            <div style={{ fontFamily: "Manrope", color: "#9FB0C9" }} className="text-[11px] font-bold tracking-wide mb-0.5">
+            <div style={{ fontFamily: "Manrope", color: "#9FB0C9" }} className="text-[10px] font-bold tracking-wide">
               SANSOON PORTAL
             </div>
-            <div style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[22px] font-black leading-tight">
+            <div
+              style={{ fontFamily: "'Noto Sans TC', sans-serif" }}
+              className="text-[18px] font-black leading-tight whitespace-nowrap"
+            >
               三順 主目錄
+            </div>
+            <div style={{ color: "#B7C2D6" }} className="text-[11px] truncate">
+              {staff ? `你好，${staff.name}` : ""}
             </div>
           </div>
           {/* 已經在首頁，所以不放「首頁」；改密碼只在主目錄提供 */}
           <HeaderActions home={false} password />
-        </div>
-        <div style={{ color: "#B7C2D6" }} className="text-[12px] mt-2">
-          {staff ? `你好，${staff.name}` : ""}
         </div>
       </div>
       {/* 原本用負邊距讓磁磚往上疊在藍色標題上，會把標題底部蓋掉；改成接在標題下方 */}
