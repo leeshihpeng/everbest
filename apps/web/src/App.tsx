@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate } from "react-router-dom";
-import { Truck, Building2, LogOut, Bell, Map, ClipboardCheck, FileText, PackageSearch, Tags, KeyRound, Home } from "lucide-react";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { Truck, Building2, Map, ClipboardCheck, FileText, PackageSearch, Tags } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import ManagerSelect from "./pages/logi/manager/ManagerSelect";
 import DriverRoute from "./pages/logi/driver/DriverRoute";
@@ -14,9 +13,8 @@ import ShipmentTracking from "./pages/ShipmentTracking";
 import CarrierDispatch from "./pages/logi/CarrierDispatch";
 import QuoteSheetPage from "./pages/QuoteSheetPage";
 import ChangePassword from "./pages/ChangePassword";
-import { getAuthedStaff, isLoggedIn, clearSession, isDriverOnly } from "./lib/auth";
-import { C, TileGrid, Tile, headerBg } from "./components/common";
-import { api } from "./api/client";
+import { getAuthedStaff, isLoggedIn, isDriverOnly } from "./lib/auth";
+import { C, TileGrid, Tile, headerBg, HeaderActions } from "./components/common";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   if (!isLoggedIn()) return <Navigate to="/login" replace />;
@@ -47,7 +45,6 @@ function ChangePasswordRoute() {
 function MainDirectory() {
   const navigate = useNavigate();
   const staff = getAuthedStaff();
-  const [unreadCount, setUnreadCount] = useState(0);
   const canBizSystems = !!staff && (staff.roles.includes("SALES") || staff.roles.includes("MANAGER"));
   const isAdmin = !!staff?.roles.includes("ADMIN");
   // 貨運派遣是倉管的作業，內勤（ADMIN）需要查看；一般物流主管不列入
@@ -55,22 +52,8 @@ function MainDirectory() {
   // 物流主管（派遣單勾選與指派）改成主目錄的獨立入口；倉管進去是唯讀
   const canLogiManager = !!staff && (staff.roles.includes("MANAGER") || staff.roles.includes("WAREHOUSE"));
 
-  // 通知鈴鐺原本在「路線排程系統」那一頁，該頁移除後改放主目錄，
-  // 否則物流主管與倉管會沒有任何入口看得到派遣單異動通知。
-  useEffect(() => {
-    api
-      .getNotifications()
-      .then((list) => setUnreadCount(list.filter((n) => !n.isRead).length))
-      .catch(() => {});
-  }, []);
-
   // 只送貨的人在主目錄沒有其他可選項目，直接帶到今日配送名單
   if (staff && isDriverOnly(staff.roles)) return <Navigate to="/logi/driver" replace />;
-
-  function handleLogout() {
-    clearSession();
-    navigate("/login");
-  }
 
   // 兩欄磁磚放不下長句，說明一律縮短成一個短詞。
   // image 是設計稿裁下來的插畫圖示（scripts/slice-tile-icons.mjs 產生）。
@@ -94,7 +77,7 @@ function MainDirectory() {
   return (
     <div>
       <div style={headerBg(C.header)} className="px-5 pt-6 pb-8 rounded-b-3xl text-white">
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3">
           {/* 公司 logo 放最左（與加到主畫面的 App 圖示同一張） */}
           <img src="/icon-192.png" alt="三順" width={46} height={46} className="rounded-xl shrink-0" />
           <div className="flex-1 min-w-0">
@@ -105,14 +88,15 @@ function MainDirectory() {
               三順 主目錄
             </div>
           </div>
+          {/* 已經在首頁，所以不放「首頁」；改密碼只在主目錄提供 */}
+          <HeaderActions home={false} password />
         </div>
         <div style={{ color: "#B7C2D6" }} className="text-[12px] mt-2">
           {staff ? `你好，${staff.name}` : ""}
         </div>
       </div>
-      {/* 原本用負邊距讓磁磚往上疊在藍色標題上，會把標題底部蓋掉；改成接在標題下方。
-          底部留空間給導覽列，磁磚才不會被蓋住。 */}
-      <div className="p-4 pt-3 pb-20">
+      {/* 原本用負邊距讓磁磚往上疊在藍色標題上，會把標題底部蓋掉；改成接在標題下方 */}
+      <div className="p-4 pt-3">
         <TileGrid>
           {systems
             .filter((s) => s.show)
@@ -130,47 +114,6 @@ function MainDirectory() {
             ))}
         </TileGrid>
       </div>
-      <BottomNav unreadCount={unreadCount} onLogout={handleLogout} />
-    </div>
-  );
-}
-
-/** 底部導覽列：常用動作放在拇指構得到的位置（首頁／通知／修改密碼／登出）。
- *  這些原本擠在標題列的小字裡，手機上不好按。 */
-function BottomNav({ unreadCount, onLogout }: { unreadCount: number; onLogout: () => void }) {
-  const navigate = useNavigate();
-  const items: { key: string; label: string; icon: LucideIcon; badge?: number; onClick: () => void }[] = [
-    { key: "home", label: "首頁", icon: Home, onClick: () => navigate("/") },
-    { key: "bell", label: "通知", icon: Bell, badge: unreadCount, onClick: () => navigate("/notifications") },
-    { key: "key", label: "修改密碼", icon: KeyRound, onClick: () => navigate("/password") },
-    { key: "out", label: "登出", icon: LogOut, onClick: onLogout },
-  ];
-  return (
-    <div
-      className="absolute bottom-0 left-0 right-0 flex items-stretch"
-      style={{ background: "#fff", borderTop: `1px solid ${C.hairline}` }}
-    >
-      {items.map((it) => {
-        const Icon = it.icon;
-        return (
-          <button key={it.key} onClick={it.onClick} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 active:opacity-70">
-            <span className="relative">
-              <Icon size={20} color={C.navy} />
-              {!!it.badge && it.badge > 0 && (
-                <span
-                  style={{ background: C.danger }}
-                  className="absolute -top-1 -right-2 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5"
-                >
-                  {it.badge > 9 ? "9+" : it.badge}
-                </span>
-              )}
-            </span>
-            <span style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.muted }} className="text-[10px] font-bold">
-              {it.label}
-            </span>
-          </button>
-        );
-      })}
     </div>
   );
 }

@@ -1,5 +1,11 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Building2, Star, Navigation2, Share2, Check, ChevronUp, ChevronDown, GripVertical, LucideIcon } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import {
+  ArrowLeft, Building2, Star, Navigation2, Share2, Check, ChevronUp, ChevronDown, GripVertical,
+  Home, Bell, KeyRound, LogOut, LucideIcon,
+} from "lucide-react";
+import { api } from "../api/client";
+import { clearSession } from "../lib/auth";
 
 // 設計 tokens（沿用 reference/route-app-prototype.jsx）
 export const C = {
@@ -58,6 +64,65 @@ export function headerBg(accent: string) {
   } as const;
 }
 
+/** 標題列右側的共用動作鈕。
+ *  主目錄：通知／修改密碼／登出（已經在首頁，不需要「首頁」）。
+ *  其他畫面：首頁／通知／登出。
+ *  例外：只送貨的人看不到主目錄，改密碼的入口只能留在他的配送名單上。 */
+export function HeaderActions({ home = true, password = false }: { home?: boolean; password?: boolean }) {
+  const navigate = useNavigate();
+  const [unread, setUnread] = useState(0);
+
+  useEffect(() => {
+    api
+      .getNotifications()
+      .then((list) => setUnread(list.filter((n) => !n.isRead).length))
+      .catch(() => {});
+  }, []);
+
+  const items: { key: string; label: string; icon: LucideIcon; badge?: number; onClick: () => void }[] = [
+    ...(home ? [{ key: "home", label: "首頁", icon: Home, onClick: () => navigate("/") }] : []),
+    { key: "bell", label: "通知", icon: Bell, badge: unread, onClick: () => navigate("/notifications") },
+    ...(password ? [{ key: "key", label: "修改密碼", icon: KeyRound, onClick: () => navigate("/password") }] : []),
+    {
+      key: "out",
+      label: "登出",
+      icon: LogOut,
+      onClick: () => {
+        clearSession();
+        navigate("/login");
+      },
+    },
+  ];
+
+  return (
+    <div className="flex items-center shrink-0">
+      {items.map((it) => {
+        const Icon = it.icon;
+        return (
+          <button
+            key={it.key}
+            onClick={it.onClick}
+            aria-label={it.label}
+            // 觸控目標 40px，比原本擠在小字裡好按很多
+            className="relative flex items-center justify-center rounded-full text-white active:bg-white/20"
+            style={{ width: 40, height: 40 }}
+          >
+            <Icon size={19} />
+            {!!it.badge && it.badge > 0 && (
+              <span
+                style={{ background: C.danger }}
+                className="absolute top-1 right-1 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5"
+              >
+                {it.badge > 9 ? "9+" : it.badge}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function TopBar({
   title,
   accent,
@@ -82,10 +147,11 @@ export function TopBar({
           <ArrowLeft size={22} />
         </button>
       )}
-      <div className="flex-1 font-bold text-[16px]" style={{ fontFamily: "'Noto Sans TC', sans-serif" }}>
+      {/* 標題較長時截斷，才不會把右側動作鈕擠出畫面 */}
+      <div className="flex-1 min-w-0 truncate font-bold text-[16px]" style={{ fontFamily: "'Noto Sans TC', sans-serif" }}>
         {title}
       </div>
-      {right}
+      {right ?? <HeaderActions />}
     </div>
   );
 }

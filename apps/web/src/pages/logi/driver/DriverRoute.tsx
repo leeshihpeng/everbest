@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Check, LogOut, KeyRound, RotateCcw, HelpCircle, ChevronUp, ChevronDown } from "lucide-react";
+import { Check, RotateCcw, HelpCircle, ChevronUp, ChevronDown } from "lucide-react";
 import { api } from "../../../api/client";
-import { getAuthedStaff, isDriverOnly, clearSession } from "../../../lib/auth";
-import { C, TopBar, Pill, RouteTimeline, ActionRow, TimelineRoute, ProductSummary, DispatchDateTag } from "../../../components/common";
+import { getAuthedStaff, isDriverOnly } from "../../../lib/auth";
+import { C, TopBar, Pill, RouteTimeline, ActionRow, TimelineRoute, ProductSummary, DispatchDateTag, HeaderActions } from "../../../components/common";
 import { buildNavigationUrl } from "../../../lib/googleMapsLoader";
 import { formatRouteShareText, shareRouteText } from "../../../lib/routeShare";
 
@@ -107,7 +107,6 @@ export default function DriverRoute() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [route, setRoute] = useState<TimelineRoute | null>(null);
   const [routeStops, setRouteStops] = useState<Order[]>([]); // 已排序好的停靠站，供「開始導航」使用
   const [routeLoading, setRouteLoading] = useState(false);
@@ -140,10 +139,7 @@ export default function DriverRoute() {
         setLoading(false);
       }
     })();
-    api
-      .getNotifications()
-      .then((list) => setUnreadCount(list.filter((n) => !n.isRead).length))
-      .catch(() => {});
+    // 未讀通知數改由標題列的 HeaderActions 自己抓
   }, []);
 
   const assignedOrders = useMemo(() => orders.filter((o) => !completed.has(o.id)), [orders, completed]);
@@ -335,50 +331,8 @@ export default function DriverRoute() {
         // 只送貨的人是直接登入到這一頁的，沒有上一層可回；改在右側提供登出。
         // 其他人（例如業務兼司機）是從主目錄直接進來的，返回就回主目錄。
         onBack={driverOnly ? undefined : () => navigate("/")}
-        // 標題列的小圖示按鈕一律撐到 40px 以上，手機上才按得準
-        right={
-          <div className="flex items-center">
-            <button
-              onClick={() => navigate("/notifications")}
-              aria-label="通知"
-              className="relative flex items-center justify-center rounded-full active:bg-white/20"
-              style={{ width: 42, height: 42 }}
-            >
-              <Bell size={19} />
-              {unreadCount > 0 && (
-                <span
-                  style={{ background: C.danger }}
-                  className="absolute top-1 right-1 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5"
-                >
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </button>
-            {/* 只送貨的人看不到主目錄，改密碼的入口只能放這裡 */}
-            {driverOnly && (
-              <>
-                <button
-                  onClick={() => navigate("/password")}
-                  aria-label="修改密碼"
-                  className="flex items-center justify-center rounded-full text-white/90 active:bg-white/20"
-                  style={{ width: 42, height: 42 }}
-                >
-                  <KeyRound size={18} />
-                </button>
-                <button
-                  onClick={() => {
-                    clearSession();
-                    navigate("/login");
-                  }}
-                  className="flex items-center gap-1 px-2 text-white/90 text-[12px] font-bold rounded-lg active:bg-white/20"
-                  style={{ height: 42 }}
-                >
-                  <LogOut size={15} /> 登出
-                </button>
-              </>
-            )}
-          </div>
-        }
+        // 只送貨的人沒有主目錄可回，所以不放「首頁」，但改密碼的入口只能留在這裡
+        right={<HeaderActions home={!driverOnly} password={driverOnly} />}
       />
       <div className="p-4">
         <HelpPanel />
