@@ -221,7 +221,7 @@ export default function ManagerSelect() {
   if (tab === "manage") {
     return (
       <div>
-        <TopBar title={canEdit ? "派遣單管理（物流主管）" : "全部派遣單（檢視）"} accent={C.header} onBack={() => navigate("/")} />
+        <TopBar title={canEdit ? "派遣單管理（物流管理）" : "全部派遣單（檢視）"} accent={C.header} onBack={() => navigate("/")} />
         {tabBar}
         <OrdersPanel allowImport={false} />
       </div>
@@ -230,7 +230,7 @@ export default function ManagerSelect() {
 
   return (
     <div>
-      <TopBar title={canEdit ? "派遣單勾選（物流主管）" : "待處理派遣單（檢視）"} accent={C.header} onBack={() => navigate("/")} />
+      <TopBar title={canEdit ? "派遣單勾選（物流管理）" : "待處理派遣單（檢視）"} accent={C.header} onBack={() => navigate("/")} />
       {tabBar}
       {canEdit && drivers.length > 0 && (
         <div className="px-4 pt-3 pb-2">

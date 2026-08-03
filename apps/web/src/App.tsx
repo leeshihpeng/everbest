@@ -62,7 +62,7 @@ function MainDirectory() {
     to: string; color: string; soft: string; show: boolean;
   }[] = [
     { key: "admin", label: "內勤後台", sub: "客戶／人員／派遣單", icon: Building2, image: "/tiles/admin.png", to: "/admin", color: C.navy, soft: "#EDEFF2", show: isAdmin },
-    { key: "logi", label: "物流主管", sub: "派遣單勾選與指派", icon: Map, image: "/tiles/logi.png", to: "/logi/manager", color: C.logiAccent, soft: C.logiAccentSoft, show: canLogiManager },
+    { key: "logi", label: "物流管理", sub: "派遣單勾選與指派", icon: Map, image: "/tiles/logi.png", to: "/logi/manager", color: C.logiAccent, soft: C.logiAccentSoft, show: canLogiManager },
     // 原本是「路線排程系統 → 業務模式 → 勾選客戶」，中間那個 ICON 只是多點一下，
     // 因此主目錄直接進到勾選客戶的畫面。
     { key: "biz", label: "路線排程系統", sub: "勾選客戶產生路線", icon: Map, image: "/tiles/biz.png", to: "/biz", color: C.bizAccent, soft: C.bizAccentSoft, show: !!staff?.roles.includes("SALES") },
