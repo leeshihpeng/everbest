@@ -103,9 +103,9 @@ export function HeaderActions({ home = true, password = false }: { home?: boolea
             key={it.key}
             onClick={it.onClick}
             aria-label={it.label}
-            // 觸控目標 40px，比原本擠在小字裡好按很多
+            // 高度維持 40 保住觸控範圍，寬度收窄讓幾顆鈕靠近一點
             className="relative flex items-center justify-center rounded-full text-white active:bg-white/20"
-            style={{ width: 40, height: 40 }}
+            style={{ width: 33, height: 40 }}
           >
             <Icon size={19} />
             {!!it.badge && it.badge > 0 && (
@@ -135,7 +135,7 @@ export function TopBar({
   right?: ReactNode;
 }) {
   return (
-    <div style={{ ...headerBg(accent), color: "#fff" }} className="flex items-center gap-1 px-3 pt-5 pb-4 rounded-b-2xl shadow-sm">
+    <div style={{ ...headerBg(accent), color: "#fff" }} className="flex items-center gap-1 pl-3 pr-2 pt-5 pb-4 rounded-b-2xl shadow-sm">
       {onBack && (
         // 觸控目標至少 44px：原本只有 28px，手機上很容易按不到
         <button

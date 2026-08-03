@@ -78,7 +78,7 @@ function MainDirectory() {
     <div>
       {/* 標題列壓低高度：右側三顆動作鈕會吃掉寬度，標題字級太大就會換行，
           所以字級縮小並強制不換行，問候語也併到同一區塊 */}
-      <div style={headerBg(C.header)} className="px-4 pt-4 pb-5 rounded-b-3xl text-white">
+      <div style={headerBg(C.header)} className="pl-6 pr-3 pt-4 pb-5 rounded-b-3xl text-white">
         <div className="flex items-center gap-2.5">
           {/* 公司 logo 放最左（與加到主畫面的 App 圖示同一張） */}
           <img src="/icon-192.png" alt="三順" width={38} height={38} className="rounded-lg shrink-0" />
