@@ -135,7 +135,7 @@ export function TopBar({
   right?: ReactNode;
 }) {
   return (
-    <div style={{ ...headerBg(accent), color: "#fff" }} className="flex items-center gap-1 pl-3 pr-2 pt-5 pb-4 rounded-b-2xl shadow-sm">
+    <div style={{ ...headerBg(accent), color: "#fff" }} className="flex items-center gap-1 pl-3 pr-3 pt-5 pb-4 rounded-b-2xl shadow-sm">
       {onBack && (
         // 觸控目標至少 44px：原本只有 28px，手機上很容易按不到
         <button

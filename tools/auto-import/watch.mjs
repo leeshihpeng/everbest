@@ -168,20 +168,23 @@ async function importFile(filePath, rule) {
   return body;
 }
 
-/** 列出資料夾內符合條件的檔案；recursive 時連年月子資料夾一起找 */
+/** 列出資料夾內符合條件的檔案。
+ *  recursive＝往下找「所有」子資料夾（不限年月那一層，例如 202607\新竹\ 也找得到）。
+ *  仍設一個很寬鬆的深度上限，純粹是防止捷徑造成的無限循環。 */
 function listFiles(dir, match, recursive) {
+  const MAX_DEPTH = 12;
   const found = [];
   const walk = (d, depth) => {
     let entries;
     try {
       entries = readdirSync(d, { withFileTypes: true });
     } catch {
-      return;
+      return; // 沒有權限或資料夾被刪掉，跳過就好
     }
     for (const e of entries) {
       const full = path.join(d, e.name);
       if (e.isDirectory()) {
-        if (recursive && depth < 3) walk(full, depth + 1);
+        if (recursive && depth < MAX_DEPTH) walk(full, depth + 1);
       } else if (match.test(e.name)) {
         found.push(full);
       }

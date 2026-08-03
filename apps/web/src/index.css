@@ -8,3 +8,17 @@ body {
   margin: 0;
   background: #f2f4f7;
 }
+
+/* 手機版固定版面：只能上下捲，不能左右滑。
+   任何內容（長地址、長單號）超出寬度時一律裁掉而不是把整頁撐寬，
+   否則畫面會左右晃、右上角的動作鈕還會被推出視窗外。 */
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+/* 沒有空格的長字串（單號、網址）不要撐破版面 */
+body {
+  overflow-wrap: break-word;
+}
