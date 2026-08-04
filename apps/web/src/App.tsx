@@ -204,7 +204,7 @@ export default function App() {
               <Route
                 path="/logi/manager"
                 element={
-                  // 倉管可進入，但頁面內是唯讀（後端也擋：/orders/select 與 PUT /orders 都要 MANAGER）
+                  // 倉管可進入，但頁面內是唯讀（後端也擋：/orders/auto-assign 與 PUT /orders 都要 MANAGER）
                   <RequireRole role={["MANAGER", "WAREHOUSE"]}>
                     <ManagerSelect />
                   </RequireRole>

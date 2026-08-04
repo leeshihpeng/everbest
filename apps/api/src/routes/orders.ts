@@ -4,8 +4,6 @@ import { PrismaClient } from "@prisma/client";
 import { importKeyOrAuth, requireRole, AuthedRequest } from "../middleware/auth";
 import { parseDispatchOrderCsv, groupOrderRowsByCustomer, getCsvHeaders } from "../services/importParser";
 import { geocodeAddress } from "../services/googleMaps";
-import { optimizeRoute } from "../services/routeOptimizer";
-import { pushLineMessage, formatRouteShareMessage } from "../services/lineNotify";
 import { loadDrivers, pickDriver, resequenceByCity } from "../services/driverAssignment";
 import { rolesToArray } from "../utils/roles";
 
@@ -288,104 +286,45 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
   }
 });
 
-// 物流主管：勾選今日實際配送客戶＋優先標記 → 產生路線＋指派送貨人員（規格書 5.2）
-ordersRouter.post("/select", requireRole("MANAGER"), async (req, res, next) => {
+// 重新套用自動指派：把還沒指派（PENDING）的自家派遣單依縣市分給送貨人員。
+//
+// 匯入當下就會自動指派，正常情況這裡沒事可做。它是設定改過之後的補救入口：
+// 「派遣單勾選」畫面移除後（使用者 2026-08-04 決定不需要），這是唯一能讓
+// 卡在待處理的單子動起來的方法。**不要因為看起來沒人用就刪掉。**
+ordersRouter.post("/auto-assign", requireRole(["MANAGER", "ADMIN"]), async (_req, res, next) => {
   try {
-    const { orderIds, priorityOrderIds, driverId, originPoint, destinationPoint } = req.body as {
-      orderIds: string[];
-      priorityOrderIds: string[];
-      driverId: string;
-      originPoint: { lat: number; lng: number };
-      destinationPoint: { lat: number; lng: number };
-    };
-
-    if (!Array.isArray(orderIds) || orderIds.length === 0) {
-      return res.status(400).json({ error: "請至少勾選一筆派遣單" });
-    }
-    // 指派對象一定要是真的送貨人員，否則派遣單會被指派到不存在／非司機的帳號上而卡死，
-    // 那個人也永遠看不到、無法配送。
-    const driver = typeof driverId === "string" ? await prisma.staff.findUnique({ where: { id: driverId } }) : null;
-    if (!driver || !rolesToArray(driver.roles).includes("DRIVER")) {
-      return res.status(400).json({ error: "請指定有效的送貨人員" });
-    }
-
-    // 只有自家配送的派遣單能指派給送貨人員；貨運行的單子走「貨運派遣」流程
-    const orders = await prisma.dispatchOrder.findMany({
-      where: { id: { in: orderIds }, carrier: "SELF" },
-      include: { items: true },
+    const drivers = await loadDrivers();
+    const pending = await prisma.dispatchOrder.findMany({
+      where: { carrier: "SELF", status: "PENDING" },
+      select: { id: true, address: true, customerName: true },
     });
 
-    const routableOrders = orders.filter((o) => o.lat != null && o.lng != null);
-    const unroutedOrders = orders.filter((o) => o.lat == null || o.lng == null);
-
-    const routeResult = await optimizeRoute({
-      origin: originPoint,
-      destination: destinationPoint,
-      stops: routableOrders.map((o) => ({
-        refId: o.id,
-        lat: o.lat!,
-        lng: o.lng!,
-        isPriority: priorityOrderIds.includes(o.id),
-      })),
-    });
-
-    // 依排序結果更新每筆派遣單狀態、優先標記、指派送貨人員、路線順序
-    await Promise.all(
-      routeResult.orderedStopRefIds.map((id, idx) =>
-        prisma.dispatchOrder.update({
-          where: { id },
-          data: {
-            status: "SELECTED",
-            isPriority: priorityOrderIds.includes(id),
-            assignedDriverId: driverId,
-            routeSequence: idx,
-            // 主管重新指派＝這趟要送，把送貨人員先前「不送」的勾選還原
-            inRoute: true,
-          },
-        })
-      )
-    );
-
-    // 沒有座標的派遣單無法排進路線，但仍要標記為已勾選配送＋指派送貨人員，
-    // 否則會卡在「待處理」動彈不得。routeSequence 留 null，排在路線最後面。
-    if (unroutedOrders.length > 0) {
-      await prisma.dispatchOrder.updateMany({
-        where: { id: { in: unroutedOrders.map((o) => o.id) } },
-        data: { status: "SELECTED", assignedDriverId: driverId, inRoute: true },
+    const touched = new Set<string>();
+    const unresolvedNames: string[] = [];
+    for (const o of pending) {
+      const driver = pickDriver(o.address, drivers);
+      if (!driver) {
+        unresolvedNames.push(o.customerName);
+        continue;
+      }
+      await prisma.dispatchOrder.update({
+        where: { id: o.id },
+        data: { status: "SELECTED", assignedDriverId: driver.id, inRoute: true },
       });
+      touched.add(driver.id);
     }
+    for (const driverId of touched) await resequenceByCity(driverId);
 
-    // 通知對應送貨人員（含沒有座標、未排進路線的派遣單）——這次指派只發一則通知，不逐筆洗版
-    // driver 已在前面驗證存在，直接沿用
-    {
-      const allAssignedIds = [...routeResult.orderedStopRefIds, ...unroutedOrders.map((o) => o.id)];
-      if (allAssignedIds.length > 0) {
+    for (const driverId of touched) {
+      const ids = pending.filter((o) => pickDriver(o.address, drivers)?.id === driverId).map((o) => o.id);
+      if (ids.length > 0) {
         await prisma.notification.create({
-          data: { orderId: allAssignedIds[0], staffId: driver.id, message: "今天有新的配送任務已指派給你" },
+          data: { orderId: ids[0], staffId: driverId, message: `有 ${ids.length} 筆派遣單已指派給你` },
         });
-      }
-      if (driver.lineGroupId) {
-        const message = formatRouteShareMessage({
-          staffName: driver.name,
-          originLabel: "公司",
-          destinationLabel: "公司",
-          totalDistanceKm: routeResult.totalDistanceKm,
-          stops: orders.map((o) => ({
-            name: o.customerName,
-            address: o.address,
-            isPriority: priorityOrderIds.includes(o.id),
-            products: o.items.map((i) => ({ name: i.productName, qty: i.quantity })),
-          })),
-        });
-        await pushLineMessage(driver.lineGroupId, message);
       }
     }
 
-    res.json({
-      ...routeResult,
-      unroutedCount: unroutedOrders.length,
-      unroutedOrderNames: unroutedOrders.map((o) => o.customerName),
-    });
+    res.json({ total: pending.length, assigned: pending.length - unresolvedNames.length, unresolvedNames });
   } catch (err) {
     next(err);
   }

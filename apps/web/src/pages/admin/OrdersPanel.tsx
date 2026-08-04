@@ -12,9 +12,11 @@ const STATUS_LABELS: Record<string, string> = {
   CANCELLED: "已刪除",
 };
 
-// 「已刪除」不在預設清單裡（後端沒指定 status 時就不回傳），
-// 要另外選才看得到——送貨人員或倉管拿掉的單子在這裡查得到。
-const STATUS_FILTERS = ["", "PENDING", "SELECTED", "DISPATCHED", "COMPLETED", "CANCELLED"];
+// 沒有「待處理」：派遣單匯入時就自動指派，PENDING 只剩下「找不到送貨人員」這個例外，
+// 物流管理首頁會直接警告，不需要在這裡佔一個分頁（使用者 2026-08-04 決定）。
+// 那些單子仍然看得到，在「全部」裡標著「待處理」。
+// 「已刪除」則是後端沒指定 status 時就不回傳，要另外選才看得到。
+const STATUS_FILTERS = ["", "SELECTED", "DISPATCHED", "COMPLETED", "CANCELLED"];
 
 interface OrderItem {
   productName: string;
@@ -317,9 +319,12 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span style={{ fontFamily: "Manrope", color: C.muted }} className="text-[11px] font-bold">
-                      {o.customerCode}
-                    </span>
+                    {/* 沒有出貨編號時 customerCode 會沿用公司名，兩個都印會變成同一個名字出現兩次 */}
+                    {o.customerCode !== o.customerName && (
+                      <span style={{ fontFamily: "Manrope", color: C.muted }} className="text-[11px] font-bold">
+                        {o.customerCode}
+                      </span>
+                    )}
                     <span className="font-semibold text-[13px]">{o.customerName}</span>
                     <DispatchDateTag createdAt={o.createdAt} />
                     {isSelf && o.lat == null && (

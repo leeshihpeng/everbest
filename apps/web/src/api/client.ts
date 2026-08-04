@@ -166,15 +166,9 @@ export const api = {
       totalDistanceText: string;
       totalDurationText: string;
     } | null>("/route/directions", { method: "POST", body: JSON.stringify(body) }),
-  selectOrders: (body: unknown) =>
-    request<{
-      orderedStopRefIds: string[];
-      legs: { refId: string; legDistanceKm: number; legDurationMin?: number }[];
-      finalLegDistanceKm: number;
-      totalDistanceKm: number;
-      unroutedCount: number;
-      unroutedOrderNames: string[];
-    }>("/orders/select", { method: "POST", body: JSON.stringify(body) }),
+  // 重新把還沒指派的自家派遣單依縣市分給送貨人員（設定改過後的補救入口）
+  autoAssignOrders: () =>
+    request<{ total: number; assigned: number; unresolvedNames: string[] }>("/orders/auto-assign", { method: "POST" }),
   updateOrderStatus: (id: string, status: "PENDING" | "SELECTED" | "DISPATCHED" | "COMPLETED" | "CANCELLED") =>
     request(`/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
   // 送貨人員／倉管把不需要送的單子拿掉。標成 CANCELLED 而不是真的刪除，

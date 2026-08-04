@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle2 } from "lucide-react";
+import { ClipboardList, Truck, Layers, AlertTriangle } from "lucide-react";
 import { api } from "../../../api/client";
 import OrdersPanel from "../../admin/OrdersPanel";
-import { C, TopBar, Checkbox, RouteTimeline, TimelineRoute, ProductSummary, QtySubtotal, DispatchDateTag } from "../../../components/common";
+import { C, TopBar, TileGrid, Tile, ProductSummary, QtySubtotal, sumQty, DispatchDateTag } from "../../../components/common";
 import { dispatchCityOf, dispatchCityIndex } from "../../../lib/taiwanCities";
 import { getAuthedStaff } from "../../../lib/auth";
 
@@ -17,82 +17,235 @@ interface Order {
   customerCode: string;
   customerName: string;
   address: string;
+  status: string;
   orderNote?: string | null;
-  createdAt?: string; // 派遣單匯入（檔案上傳）的時間
+  createdAt?: string;
   items: OrderItem[];
 }
 
-interface Staff {
-  id: string;
-  name: string;
-  roles: string[];
-}
+/** 三個出貨管道。北部＝自家送貨人員（只送北部），另外兩個是交給貨運行的。
+ *  貨品數量統計就是照這三個管道分開算，最後再加總。 */
+const CHANNELS = [
+  { key: "north", label: "北部", sub: "自家配送", carrier: "SELF", image: "/tiles/logi.png", icon: ClipboardList },
+  { key: "hsinchu", label: "新竹", sub: "新竹貨運", carrier: "新竹貨運", image: "/tiles/carrier.png", icon: Truck },
+  { key: "dalen", label: "大榮", sub: "大榮貨運", carrier: "大榮貨運", image: "/tiles/carrier.png", icon: Truck },
+] as const;
 
-interface Settings {
-  companyAddress: string;
-  companyLat?: number | null;
-  companyLng?: number | null;
+type View = null | "manage" | "north" | "hsinchu" | "dalen" | "total";
+
+/** 已指派＝這批貨真的要出去的單子。
+ *  自家配送：已指派給送貨人員（SELECTED）或已檢貨（DISPATCHED）。
+ *  貨運行：還沒交給貨運行的都算（已刪除的後端就不會回傳了）。 */
+function isActive(carrier: string, status: string): boolean {
+  return carrier === "SELF" ? status === "SELECTED" || status === "DISPATCHED" : status !== "COMPLETED";
 }
 
 export default function ManagerSelect() {
   const navigate = useNavigate();
-  // 倉管只能看：勾選、指派送貨人員、優先標記、送出全部不顯示。
-  // 後端同樣擋著（/orders/select 與 PUT /orders 都要 MANAGER），前端只是不要給看得到卻按不動的按鈕。
+  // 倉管對物流模式是唯讀：看得到統計，但不能按「重新指派」（後端也擋著）
   const canEdit = !!getAuthedStaff()?.roles.includes("MANAGER");
 
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [drivers, setDrivers] = useState<Staff[]>([]);
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [priorityOverride, setPriorityOverride] = useState<Set<string>>(new Set());
-  const [driverId, setDriverId] = useState("");
-
+  const [view, setView] = useState<View>(null);
+  const [byCarrier, setByCarrier] = useState<Record<string, Order[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [route, setRoute] = useState<TimelineRoute | null>(null);
-  const [driverName, setDriverName] = useState("");
-  const [unrouted, setUnrouted] = useState<string[]>([]);
-  const [tab, setTab] = useState<"select" | "manage">("select");
+  const [assigning, setAssigning] = useState(false);
+  const [assignResult, setAssignResult] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const lists = await Promise.all(CHANNELS.map((c) => api.getOrders({ carrier: c.carrier }) as Promise<Order[]>));
+      const next: Record<string, Order[]> = {};
+      CHANNELS.forEach((c, i) => {
+        next[c.key] = lists[i].filter((o) => isActive(c.carrier, o.status));
+      });
+      // 找不到送貨人員而卡在待處理的自家單子，要在畫面上講出來
+      next.pending = lists[0].filter((o) => o.status === "PENDING");
+      setByCarrier(next);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    (async () => {
-      try {
-        const [orderList, staffList, s] = await Promise.all([api.getOrders({ status: "PENDING" }), api.getStaff(), api.getSettings()]);
-        setOrders(orderList);
-        const driverList = staffList.filter((st: Staff) => st.roles.includes("DRIVER"));
-        setDrivers(driverList);
-        if (driverList.length > 0) setDriverId(driverList[0].id);
-        setSettings(s);
-      } catch (err) {
-        setError((err as Error).message);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    load();
   }, []);
 
-  const toggleSel = (id: string) => {
-    const s = new Set(selected);
-    s.has(id) ? s.delete(id) : s.add(id);
-    setSelected(s);
-  };
-  // 尚未勾選時先顯示全部待處理的總計，勾選後只算已勾選的——兩者數量本來就不同
-  const summaryOrders = selected.size > 0 ? orders.filter((o) => selected.has(o.id)) : orders;
-  const summaryTitle = !canEdit
-    ? "待處理貨品總計"
-    : selected.size > 0
-    ? `已勾選貨品總計（${selected.size} 筆）`
-    : "待處理貨品總計（尚未勾選）";
+  const allActive = useMemo(() => CHANNELS.flatMap((c) => byCarrier[c.key] ?? []), [byCarrier]);
+  const pending = byCarrier.pending ?? [];
 
-  const allSelected = orders.length > 0 && selected.size === orders.length;
-  const toggleSelectAll = () => {
-    setSelected(allSelected ? new Set() : new Set(orders.map((o) => o.id)));
-  };
+  async function handleAutoAssign() {
+    setAssigning(true);
+    setAssignResult(null);
+    setError(null);
+    try {
+      const r = await api.autoAssignOrders();
+      setAssignResult(
+        r.unresolvedNames.length > 0
+          ? `已指派 ${r.assigned} 筆；${r.unresolvedNames.length} 筆仍找不到對應的送貨人員（${r.unresolvedNames.join("、")}），請到內勤後台「人員」確認配送縣市設定。`
+          : `已指派 ${r.assigned} 筆。`
+      );
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setAssigning(false);
+    }
+  }
 
-  // 依縣市分組，順序為使用者指定的送貨路線順序（台北→新北→基隆→桃園→其他）
-  const cityGroups = useMemo(() => {
+  if (loading) return <div className="p-6 text-center text-[13px]" style={{ color: C.muted }}>載入中…</div>;
+
+  // 派遣單管理：沿用內勤後台的清單。匯入 CSV 是內勤的職責，這裡不提供。
+  if (view === "manage") {
+    return (
+      <div>
+        <TopBar title="派遣單管理（物流管理）" accent={C.header} onBack={() => setView(null)} />
+        <OrdersPanel allowImport={false} />
+      </div>
+    );
+  }
+
+  if (view) {
+    const channel = CHANNELS.find((c) => c.key === view);
+    const orders = channel ? byCarrier[channel.key] ?? [] : allActive;
+    const title = channel ? `${channel.label}（${channel.sub}）` : "總計（全部管道）";
+
+    return (
+      <div>
+        <TopBar title={title} accent={C.header} onBack={() => setView(null)} />
+        <div className="p-4">
+          <ProductSummary
+            title={`貨品數量統計（已指派）`}
+            items={orders.flatMap((o) => o.items)}
+            orderCount={orders.length}
+            accent={C.logiAccent}
+          />
+
+          {/* 總計要看得出各管道各出多少，只有一個大數字沒辦法核對 */}
+          {!channel && (
+            <div className="rounded-xl mb-3 overflow-hidden" style={{ background: "#fff", border: `1px solid ${C.hairline}` }}>
+              <div className="px-3 py-2" style={{ background: C.bg }}>
+                <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[12px] font-bold">
+                  各管道明細
+                </span>
+              </div>
+              {CHANNELS.map((c) => {
+                const list = byCarrier[c.key] ?? [];
+                return (
+                  <div key={c.key} className="px-3 py-2 border-t flex items-center justify-between" style={{ borderColor: C.hairline }}>
+                    <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[12px] font-semibold">
+                      {c.label}
+                      <span style={{ color: C.muted }} className="font-normal">
+                        （{c.sub}）
+                      </span>
+                    </span>
+                    <span style={{ color: C.muted, fontFamily: "Manrope" }} className="text-[11px] font-bold">
+                      {list.length} 筆・{sumQty(list.flatMap((o) => o.items))} 個
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <ChannelOrderList orders={orders} groupByCity={channel?.carrier === "SELF"} />
+        </div>
+      </div>
+    );
+  }
+
+  const totalQty = sumQty(allActive.flatMap((o) => o.items));
+
+  return (
+    <div>
+      <TopBar title={canEdit ? "物流管理" : "物流管理（檢視）"} accent={C.header} onBack={() => navigate("/")} />
+      <div className="p-4">
+        {error && (
+          <div className="text-[12px] mb-2" style={{ color: C.danger }}>
+            {error}
+          </div>
+        )}
+
+        {/* 派遣單匯入時就自動指派，所以待處理正常應該是 0。
+            不是 0 就代表分工設定有缺口，要明顯地講出來並給一個補救的按鈕。 */}
+        {pending.length > 0 && (
+          <div className="rounded-xl p-3 mb-3" style={{ background: C.goldSoft, border: `1px solid ${C.gold}` }}>
+            <div className="flex items-start gap-2">
+              <AlertTriangle size={16} color={C.gold} className="mt-0.5 shrink-0" />
+              <div className="text-[12px] leading-relaxed" style={{ color: C.text }}>
+                有 <b>{pending.length}</b> 筆自家派遣單找不到對應的送貨人員，還沒指派出去。
+                請到內勤後台「人員」確認送貨人員的<b>配送縣市</b>（不勾任何縣市＝後備，接收其他所有縣市），
+                設定好之後按下面的按鈕重新指派。
+              </div>
+            </div>
+            {canEdit && (
+              <button
+                onClick={handleAutoAssign}
+                disabled={assigning}
+                style={{ background: C.gold, minHeight: 44 }}
+                className="w-full text-white text-[12px] font-bold rounded-lg mt-2 disabled:opacity-60"
+              >
+                {assigning ? "指派中…" : "重新指派"}
+              </button>
+            )}
+          </div>
+        )}
+        {assignResult && (
+          <div className="text-[12px] mb-3 rounded-xl p-3" style={{ background: C.logiAccentSoft, color: C.navy }}>
+            {assignResult}
+          </div>
+        )}
+
+        <TileGrid>
+          <Tile
+            icon={ClipboardList}
+            image="/tiles/logi.png"
+            label="派遣單管理"
+            sub={`${allActive.length} 筆`}
+            color={C.logiAccent}
+            soft={C.logiAccentSoft}
+            onClick={() => setView("manage")}
+          />
+          {CHANNELS.map((c) => {
+            const list = byCarrier[c.key] ?? [];
+            return (
+              <Tile
+                key={c.key}
+                icon={c.icon}
+                image={c.image}
+                label={c.label}
+                sub={`${list.length} 筆・${sumQty(list.flatMap((o) => o.items))} 個`}
+                color={C.logiAccent}
+                soft={C.logiAccentSoft}
+                dimmed={list.length === 0}
+                onClick={() => setView(c.key)}
+              />
+            );
+          })}
+          <Tile
+            icon={Layers}
+            image="/tiles/tracking.png"
+            label="總計"
+            sub={`${allActive.length} 筆・${totalQty} 個`}
+            color={C.navy}
+            soft={C.bg}
+            dimmed={allActive.length === 0}
+            onClick={() => setView("total")}
+          />
+        </TileGrid>
+      </div>
+    </div>
+  );
+}
+
+/** 統計頁下方的單子清單。自家配送依縣市分區（送貨順序），貨運行送全台各地，分區沒意義。 */
+function ChannelOrderList({ orders, groupByCity }: { orders: Order[]; groupByCity?: boolean }) {
+  const groups = useMemo(() => {
+    if (!groupByCity) return [["", orders] as [string, Order[]]];
     const map = new Map<string, Order[]>();
     for (const o of orders) {
       const city = dispatchCityOf(o.address);
@@ -100,300 +253,73 @@ export default function ManagerSelect() {
       map.get(city)!.push(o);
     }
     return [...map.entries()].sort(([a], [b]) => dispatchCityIndex(a) - dispatchCityIndex(b));
-  }, [orders]);
+  }, [orders, groupByCity]);
 
-  const toggleCity = (group: Order[]) => {
-    const wasAll = group.every((o) => selected.has(o.id));
-    const s = new Set(selected);
-    for (const o of group) (wasAll ? s.delete(o.id) : s.add(o.id));
-    setSelected(s);
-  };
-  const togglePriority = (id: string) => {
-    const s = new Set(priorityOverride);
-    s.has(id) ? s.delete(id) : s.add(id);
-    setPriorityOverride(s);
-  };
-
-  async function handleSubmit() {
-    setSubmitting(true);
-    setSubmitError(null);
-    try {
-      if (settings?.companyLat == null || settings?.companyLng == null) {
-        throw new Error("公司座標未設定，請確認系統設定");
-      }
-      const companyPoint = { lat: settings.companyLat, lng: settings.companyLng };
-      const result = await api.selectOrders({
-        orderIds: Array.from(selected),
-        priorityOrderIds: Array.from(priorityOverride),
-        driverId,
-        originPoint: companyPoint,
-        destinationPoint: companyPoint,
-      });
-      const byId = new Map(orders.map((o) => [o.id, o]));
-      setRoute({
-        stops: result.legs.map((leg) => {
-          const o = byId.get(leg.refId)!;
-          return {
-            refId: o.id,
-            name: o.customerName,
-            subtitle: o.address,
-            isPriority: priorityOverride.has(o.id),
-            legDistanceKm: leg.legDistanceKm,
-            legDurationMin: leg.legDurationMin,
-            note: o.orderNote ?? undefined,
-            products: o.items.map((i) => ({ name: i.productName, qty: i.quantity })),
-          };
-        }),
-        finalLegDistanceKm: result.finalLegDistanceKm,
-        totalDistanceKm: result.totalDistanceKm,
-      });
-      setUnrouted(result.unroutedOrderNames ?? []);
-      setDriverName(drivers.find((d) => d.id === driverId)?.name ?? "");
-    } catch (err) {
-      setSubmitError((err as Error).message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  if (loading) return <div className="p-6 text-center text-[13px]" style={{ color: C.muted }}>載入中…</div>;
-  if (error) return <div className="p-6 text-center text-[13px]" style={{ color: C.danger }}>{error}</div>;
-
-  if (route) {
+  if (orders.length === 0) {
     return (
-      <div>
-        <TopBar title="已送出配送指派" accent={C.header} onBack={() => navigate("/")} />
-        <div className="p-4">
-          <div className="rounded-xl p-3 mb-4 flex items-start gap-2" style={{ background: C.logiAccentSoft }}>
-            <CheckCircle2 size={18} color={C.logiAccent} className="mt-0.5" />
-            <div style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.navy }} className="text-[12px] font-medium leading-relaxed">
-              已將 {selected.size} 筆派遣單狀態更新為「已勾選配送」，並產生預設路線順序，指派給送貨人員
-              <b>{driverName}</b>。
-            </div>
-          </div>
-          {unrouted.length > 0 && (
-            <div className="rounded-xl p-3 mb-4" style={{ background: C.goldSoft, color: C.gold }}>
-              <div className="text-[12px] font-bold">{unrouted.length} 筆缺少座標，已指派給送貨人員但未排進路線：</div>
-              <div className="text-[11px] mt-1">{unrouted.join("、")}</div>
-              <div className="text-[11px] mt-1">請到內勤後台「派遣單」補齊座標後，送貨人員頁面會自動重新排入路線。</div>
-            </div>
-          )}
-          <ProductSummary
-            title="本次配送貨品總計"
-            items={orders.filter((o) => selected.has(o.id)).flatMap((o) => o.items)}
-            orderCount={selected.size}
-            accent={C.logiAccent}
-          />
-          <div style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.muted }} className="text-[12px] font-bold mb-2">
-            預設路線順序（公司 → 公司）
-          </div>
-          <RouteTimeline originLabel="公司" destinationLabel="公司" route={route} showProducts={true} accent={C.logiAccent} />
-          <button onClick={() => navigate("/route")} style={{ background: C.logiAccent }} className="w-full text-white font-bold text-[14px] py-3 rounded-xl mt-4">
-            完成
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const tabBar = (
-    <div className="px-4 pt-3 flex gap-2">
-      {(
-        [
-          ["select", canEdit ? "派遣單勾選" : "待處理派遣單"],
-          ["manage", canEdit ? "派遣單管理" : "全部派遣單"],
-        ] as ["select" | "manage", string][]
-      ).map(([key, label]) => (
-        <button
-          key={key}
-          onClick={() => setTab(key)}
-          style={tab === key ? { background: C.logiAccent, color: "#fff" } : { color: C.muted, border: `1px solid ${C.hairline}` }}
-          className="px-3 py-1.5 rounded-full text-[12px] font-bold"
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-
-  // 派遣單管理：沿用內勤後台的清單（含各狀態分頁）。
-  // 匯入 CSV 是內勤的職責，物流主管這邊不提供（allowImport={false}）。
-  if (tab === "manage") {
-    return (
-      <div>
-        <TopBar title={canEdit ? "派遣單管理（物流管理）" : "全部派遣單（檢視）"} accent={C.header} onBack={() => navigate("/")} />
-        {tabBar}
-        <OrdersPanel allowImport={false} />
+      <div className="text-center text-[13px] py-8" style={{ color: C.muted }}>
+        目前沒有待出貨的派遣單
       </div>
     );
   }
 
   return (
-    <div>
-      <TopBar title={canEdit ? "派遣單勾選（物流管理）" : "待處理派遣單（檢視）"} accent={C.header} onBack={() => navigate("/")} />
-      {tabBar}
-      {canEdit && drivers.length > 0 && (
-        <div className="px-4 pt-3 pb-2">
-          <label style={{ color: C.muted, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[12px] font-bold block mb-1">
-            指派送貨人員
-          </label>
-          <select
-            value={driverId}
-            onChange={(e) => setDriverId(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg text-[13px]"
-            style={{ border: `1px solid ${C.hairline}` }}
-          >
-            {drivers.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-      <div className={canEdit ? "px-4 pb-28" : "px-4 pb-6"}>
-        {orders.length > 0 && (
-          <ProductSummary title={summaryTitle} items={summaryOrders.flatMap((o) => o.items)} orderCount={summaryOrders.length} accent={C.logiAccent} />
-        )}
-        {/* 待處理清單放在總計下方，中間用分隔線拉開，不要讓人誤讀成總計的一部分 */}
-        {orders.length > 0 && (
-          <div
-            className="mt-4 pt-3 mb-1 flex items-center justify-between border-t"
-            style={{ borderColor: C.hairline, color: C.muted, fontFamily: "'Noto Sans TC', sans-serif" }}
-          >
-            <div className="text-[12px]">待處理派遣單（依縣市分區）</div>
-            {canEdit && (
-              <button onClick={toggleSelectAll} className="flex items-center gap-1.5">
-                <Checkbox checked={allSelected} />
-                <span style={{ color: C.text }} className="text-[12px] font-bold">
-                  全部勾選
-                </span>
-              </button>
-            )}
-          </div>
-        )}
-        {cityGroups.map(([city, group]) => {
-          const cityAll = group.every((o) => selected.has(o.id));
-          const citySelected = group.filter((o) => selected.has(o.id)).length;
-          return (
-            <div key={city} className="mt-3">
-              {/* 縣市分隔＋整區勾選 */}
-              <button
-                onClick={() => canEdit && toggleCity(group)}
-                disabled={!canEdit}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg mb-2"
-                style={{ background: C.logiAccentSoft }}
-              >
-                {canEdit && <Checkbox checked={cityAll} />}
-                <span style={{ color: C.logiAccent, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[13px] font-bold">
-                  {city}
-                </span>
-                <span style={{ color: C.muted, fontFamily: "Manrope" }} className="text-[11px] font-bold ml-auto">
-                  {canEdit ? `${citySelected}/${group.length}` : `${group.length} 筆`}
-                </span>
-              </button>
-              {group.map((o) => {
-                const isSel = selected.has(o.id);
-                const isPriority = priorityOverride.has(o.id);
-                return (
-                  <div key={o.id} className="mb-2 rounded-xl p-3" style={{ background: "#fff", border: `1px solid ${isSel ? C.logiAccent : C.hairline}` }}>
-                    <div className="flex items-start gap-3">
-                      {canEdit && (
-                        <button onClick={() => toggleSel(o.id)} className="mt-0.5">
-                          <Checkbox checked={isSel} />
-                        </button>
-                      )}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span style={{ fontFamily: "Manrope", color: C.muted }} className="text-[11px] font-bold">
-                            {o.customerCode}
-                          </span>
-                          <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-semibold text-[13px]">
-                            {o.customerName}
-                          </span>
-                          <DispatchDateTag createdAt={o.createdAt} />
-                        </div>
-                        <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
-                          {o.address}
-                        </div>
-                        {/* 貨單附註：勾選配送時就要看到，才能決定優先順序或特別交代 */}
-                        {o.orderNote && (
-                          <div
-                            className="mt-1 text-[11px] px-1.5 py-0.5 rounded"
-                            style={{ background: C.goldSoft, color: C.text, whiteSpace: "pre-wrap" }}
-                          >
-                            <span style={{ color: C.gold }} className="font-bold">
-                              貨單附註：
-                            </span>
-                            {o.orderNote}
-                          </div>
-                        )}
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          {o.items.map((p, pi) => (
-                            <span key={pi} style={{ background: C.bg, color: C.text }} className="text-[11px] px-1.5 py-0.5 rounded">
-                              {p.productName} ×{p.quantity}
-                            </span>
-                          ))}
-                          {o.items.length > 0 && <QtySubtotal total={o.items.reduce((s, p) => s + p.quantity, 0)} accent={C.logiAccent} />}
-                        </div>
-                        {canEdit && isSel && (
-                          <button onClick={() => togglePriority(o.id)} className="mt-2 flex items-center gap-1">
-                            <div
-                              className="flex items-center justify-center rounded"
-                              style={{
-                                width: 16,
-                                height: 16,
-                                border: `2px solid ${isPriority ? C.gold : C.hairline}`,
-                                background: isPriority ? C.gold : "transparent",
-                              }}
-                            >
-                              {isPriority && <span style={{ color: "#fff", fontSize: 10 }}>✓</span>}
-                            </div>
-                            <span style={{ color: isPriority ? C.gold : C.muted, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[11px] font-bold">
-                              標記為優先客戶（本次配送）
-                            </span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
+    <>
+      {groups.map(([city, group]) => (
+        <div key={city} className="mb-3">
+          {city && (
+            <div className="flex items-center justify-between px-3 py-1.5 rounded-lg mb-1.5" style={{ background: C.logiAccentSoft }}>
+              <span style={{ color: C.logiAccent, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[13px] font-bold">
+                {city}
+              </span>
+              <span style={{ color: C.muted, fontFamily: "Manrope" }} className="text-[11px] font-bold">
+                {group.length} 筆
+              </span>
+            </div>
+          )}
+          <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.hairline}`, background: "#fff" }}>
+            {group.map((o) => (
+              <div key={o.id} className="px-3 py-2 border-t first:border-t-0" style={{ borderColor: C.hairline }}>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {/* 自家配送的單子沒有出貨編號時，customerCode 會直接沿用公司名，
+                      兩個都印就變成同一個名字連續出現兩次 */}
+                  {o.customerCode !== o.customerName && (
+                    <span style={{ fontFamily: "Manrope", color: C.muted }} className="text-[11px] font-bold">
+                      {o.customerCode}
+                    </span>
+                  )}
+                  <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-semibold text-[13px]">
+                    {o.customerName}
+                  </span>
+                  <DispatchDateTag createdAt={o.createdAt} />
+                </div>
+                <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
+                  {o.address}
+                </div>
+                {o.orderNote && (
+                  <div
+                    className="mt-1 text-[11px] px-1.5 py-0.5 rounded"
+                    style={{ background: C.goldSoft, color: C.text, whiteSpace: "pre-wrap" }}
+                  >
+                    <span style={{ color: C.gold }} className="font-bold">
+                      貨單附註：
+                    </span>
+                    {o.orderNote}
                   </div>
-                );
-              })}
-            </div>
-          );
-        })}
-        {orders.length === 0 && (
-          <div className="text-center text-[13px] py-8" style={{ color: C.muted }}>
-            <div>目前沒有待處理派遣單</div>
-            {/* 匯入即自動指派後，這一頁平常本來就會是空的。
-                不講清楚的話，主管會以為系統壞了或是派遣單沒進來。 */}
-            <div className="text-[11px] mt-2 leading-relaxed px-4">
-              派遣單上傳後會依收件地址的縣市<b>直接指派給送貨人員</b>，不需要在這裡勾選。
-              <br />
-              只有找不到對應送貨人員的單子才會留在這一頁，等你手動指派。
-              <br />
-              要調整分工請到內勤後台「人員」設定各送貨人員的配送縣市。
-            </div>
+                )}
+                <div className="mt-1 flex flex-wrap items-center gap-1">
+                  {o.items.map((it, i) => (
+                    <span key={i} style={{ background: C.bg, color: C.text }} className="text-[11px] px-1.5 py-0.5 rounded">
+                      {it.productName} ×{it.quantity}
+                    </span>
+                  ))}
+                  {o.items.length > 0 && <QtySubtotal total={sumQty(o.items)} accent={C.logiAccent} />}
+                </div>
+              </div>
+            ))}
           </div>
-        )}
-      </div>
-      {submitError && (
-        <div className="px-4 text-[12px] mb-2" style={{ color: C.danger }}>
-          {submitError}
         </div>
-      )}
-      {canEdit && (
-        <div className="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto p-4" style={{ background: "linear-gradient(to top, #F2F4F7 70%, transparent)" }}>
-          <button
-            onClick={handleSubmit}
-            disabled={selected.size === 0 || !driverId || submitting}
-            style={{ background: selected.size && driverId ? C.logiAccent : "#B9C2D0" }}
-            className="w-full text-white font-bold text-[14px] py-3 rounded-xl shadow-lg disabled:opacity-70"
-          >
-            {submitting ? "送出中…" : `送出（已選 ${selected.size} 筆・指派送貨人員並產生路線）`}
-          </button>
-        </div>
-      )}
-    </div>
+      ))}
+    </>
   );
 }
