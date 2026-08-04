@@ -14,8 +14,19 @@ Cloud Run 冷啟動約 1–2 秒，而且用量在免費額度內。
 | 服務 | `sansoon-api`（region `asia-east1`） |
 | 網址 | https://sansoon-api-702692123354.asia-east1.run.app |
 
-尚未完成：`LINE_CHANNEL_ACCESS_TOKEN` 還沒設（本機 `.env` 是空的，值只在 Render 上），
-所以 Cloud Run 目前**不會發 LINE 推播**。切換前要從 Render 的 Environment 頁面複製過來。
+### 關於 `LINE_CHANNEL_ACCESS_TOKEN`
+
+**不用設，Render 上也沒有。** 2026-08-04 查證：Render 的 Environment 只有
+`CORS_ORIGINS`／`DATABASE_URL`／`GOOGLE_MAPS_API_KEY`／`IMPORT_API_KEY`／`JWT_SECRET` 五個，
+而且 9 位員工**沒有任何一位**設了 `lineGroupId`。
+
+也就是說伺服器端的 LINE 推播（`services/lineNotify.ts`）從來沒有真正跑過：
+唯一的呼叫點在規劃路線後、且僅在司機有群組 ID 時才會發，條件從未成立。
+前端「分享路線」按鈕走的是**裝置本身的分享功能**，不經過後端，所以不受影響。
+
+若哪天真的要啟用，需要三件事一起做：申請 LINE Messaging API channel 取得 token、
+設到 Cloud Run 環境變數、在人員設定裡填入各司機的群組 ID。缺一個都不會有訊息送出，
+而且**不會報錯**（只寫一行 `console.warn`），很容易誤以為壞掉。
 
 ## 一、事前準備
 
@@ -133,22 +144,19 @@ curl -o NUL -s -w "%{time_total}s\n" https://sansoon-api-702692123354.asia-east1
 
 ## 六、切換前端（尚未執行）
 
-切換是一次做完的三件事，順序不能顛倒，否則會有一段時間打不通：
+Cloud Run 的環境變數已經跟 Render 對齊（五個都設好了），切換剩兩件事：
 
-1. 先補上 `LINE_CHANNEL_ACCESS_TOKEN`（值從 Render 的 Environment 頁面複製）：
-
-```bash
-gcloud run services update sansoon-api --region asia-east1 --update-env-vars LINE_CHANNEL_ACCESS_TOKEN=<值>
-```
-
-2. Vercel 專案 → Settings → Environment Variables → 把 `VITE_API_BASE_URL`
+1. Vercel 專案 → Settings → Environment Variables → 把 `VITE_API_BASE_URL`
    改成 `https://sansoon-api-702692123354.asia-east1.run.app`，然後重新部署前端：
 
 ```bash
 npx vercel --prod
 ```
 
-3. 本機自動匯入程式 `tools/auto-import/.env` 的 `API_BASE` 也改成新網址，重啟 watcher。
+2. 另一台工作電腦上自動匯入程式 `tools/auto-import/.env` 的 `API_BASE`
+   也改成新網址，重啟 watcher。**這一步漏掉，派遣單與貨物追蹤就不會再自動匯入**，
+   而且 watcher 那邊只會安靜地打到舊網址（Render 還活著的話甚至會成功寫進同一個資料庫，
+   更難察覺）。
 
 `CORS_ORIGINS` 已經設成 `https://everbest-web-jade.vercel.app`，不用再動。
 
