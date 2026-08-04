@@ -26,6 +26,8 @@
 - 後端：https://sansoon-api-702692123354.asia-east1.run.app（**Cloud Run，2026-08-04 起正式**）
 - 舊後端 https://everbest.onrender.com（Render）**還活著但已無人使用**，留著當退路。
   Render 仍會隨 `git push` 自動部署；確認 Cloud Run 穩定後再關閉。
+  **關掉之前先確認工作電腦的 `tools/auto-import/.env` 的 `API_BASE` 已改成 Cloud Run**——
+  兩邊連同一個資料庫，打舊網址照樣成功，看不出異狀，關掉那天才會無聲停止匯入。
 - **Vercel 的 GitHub 自動部署目前是壞的**，前端要用 `npx vercel --prod` 手動發佈。
 - Cloud Run 部署方式、環境變數、IAM 權限見 `docs/cloud-run.md`。
   **後端改完不會自己上線**，要跑 `gcloud run deploy sansoon-api --source . --region asia-east1`。

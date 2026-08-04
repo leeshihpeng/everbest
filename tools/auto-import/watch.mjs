@@ -37,7 +37,9 @@ function loadEnv() {
 }
 
 const env = loadEnv();
-const API_BASE = (env.API_BASE || "https://everbest.onrender.com").replace(/\/+$/, "");
+// 預設打 Cloud Run（2026-08-04 起的正式後端）。舊的 Render 網址還活著，
+// 但已無人使用，遲早會關掉——.env 裡若還寫著 onrender 要一併改掉。
+const API_BASE = (env.API_BASE || "https://sansoon-api-702692123354.asia-east1.run.app").replace(/\/+$/, "");
 const IMPORT_KEY = env.IMPORT_API_KEY || "";
 const POLL_SECONDS = Number(env.POLL_SECONDS || 60);
 // 當天的派遣單即使內容沒變，每隔這麼久也重送一次，讓被刪掉的資料能自己補回來。
@@ -48,7 +50,7 @@ const LOG_PATH = path.join(HERE, "auto-import.log");
 const LOCK_PATH = path.join(HERE, "watch.lock");
 
 if (!IMPORT_KEY) {
-  console.error("`.env` 裡的 IMPORT_API_KEY 是空的，請填入與 Render 環境變數相同的金鑰。");
+  console.error("`.env` 裡的 IMPORT_API_KEY 是空的，請填入與後端 IMPORT_API_KEY 環境變數相同的金鑰。");
   process.exit(1);
 }
 
@@ -286,6 +288,10 @@ async function scanOnce() {
 
 acquireLock();
 log(`開始監看 v${VERSION}（每 ${POLL_SECONDS} 秒掃一次）→ ${API_BASE}`);
+// 舊後端遲早會關掉，指著它會在某天無聲停止匯入，開機時就講清楚
+if (/onrender\.com/.test(API_BASE)) {
+  log("  ⚠ 目前指向舊的 Render 後端，請把 .env 的 API_BASE 改成 Cloud Run 網址");
+}
 log(
   RECHECK_MINUTES > 0
     ? `  當天的派遣單即使內容沒變，每 ${RECHECK_MINUTES} 分鐘也會重送一次（被刪掉的資料會自己補回來）`

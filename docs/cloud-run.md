@@ -146,11 +146,14 @@ curl -o NUL -s -w "%{time_total}s\n" https://sansoon-api-702692123354.asia-east1
 
 前端已於 2026-08-04 切換完成（`VITE_API_BASE_URL` 指向 Cloud Run，`npx vercel --prod` 發佈）。
 
-**還沒做的**：另一台工作電腦上自動匯入程式 `tools/auto-import/.env` 的 `API_BASE`
-也要改成新網址並重啟 watcher。**這一步漏掉，派遣單與貨物追蹤就不會再自動匯入**——
-不過因為 Render 還活著、而且連的是同一個 Neon 資料庫，
-watcher 打舊網址其實還是會成功寫入，**完全看不出異狀**，等哪天關掉 Render 才會爆。
-所以關 Render 前一定要先確認這一項做完了。
+自動匯入程式的預設網址與 `.env.example` 也已改成 Cloud Run，
+`watch.mjs` 啟動時若偵測到 `API_BASE` 還指著 `onrender.com` 會在日誌印出警告。
+
+**還沒做的**：另一台工作電腦上 `tools/auto-import/.env` 的 `API_BASE` 要實際改過去
+（那台的 `.env` 不在版控裡，複製新版程式不會覆蓋它）。
+因為 Render 還活著、連的又是同一個 Neon 資料庫，打舊網址仍然會成功寫入、
+**完全看不出異狀**，等關掉 Render 那天才會無聲停止匯入。
+所以關 Render 前一定要先確認這一項做完了——看 `auto-import.log` 開頭那行網址最快。
 
 ### ⚠️ 設 Vercel 環境變數不要用 PowerShell 管線
 

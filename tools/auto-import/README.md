@@ -34,10 +34,10 @@
 
 日誌開頭也會列出每個資料夾「目前符合的檔案幾個」，是 0 就代表路徑不對，而不是程式沒跑。
 
-後端跑在 Render 雲端、讀不到公司電腦的磁碟，所以這支程式**必須在公司這台電腦上執行**；
+後端跑在雲端（Cloud Run）、讀不到公司電腦的磁碟，所以這支程式**必須在公司這台電腦上執行**；
 電腦關機或睡眠時不會匯入，開機後會自動補上當天還沒匯入的檔案。
 
-## 一、設定金鑰（只需做一次）
+## 一、設定金鑰（只需做一次，目前已設定好）
 
 1. 產生一組金鑰（PowerShell）：
 
@@ -45,11 +45,14 @@
 [Convert]::ToBase64String((1..32|%{Get-Random -Max 256}))
 ```
 
-2. 到 Render → everbest 服務 → Environment，新增環境變數
-   `IMPORT_API_KEY`，值就是上一步產生的字串，儲存後等服務重啟。
-   （**變數名稱結尾不要有空白**，Render 曾發生過看起來設好、程式卻讀不到的情況。）
+2. 設到後端（Cloud Run）：
 
-3. 確認後端真的讀到了：開 <https://everbest.onrender.com/health>，
+```bash
+gcloud run services update sansoon-api --region asia-east1 --project sansoon-route --update-env-vars IMPORT_API_KEY=<值>
+```
+
+3. 確認後端真的讀到了：開
+   <https://sansoon-api-702692123354.asia-east1.run.app/health>，
    `hasImportKey` 要是 `true`。
 
 4. 把 `.env.example` 複製成 `.env`，`IMPORT_API_KEY` 填入同一組字串。
@@ -97,7 +100,9 @@ powershell -ExecutionPolicy Bypass -File C:\Claude\route-scheduler\tools\auto-im
 1. 那台電腦要先裝 [Node.js](https://nodejs.org/)（LTS 版即可）。
 2. 把整個 `tools\auto-import` 資料夾複製過去（`state.json`、`auto-import.log` 可以不用帶）。
 3. 編輯 `.env`：`IMPORT_API_KEY` 保持同一組；`DIR_SELF`／`DIR_HSINCHU`／`DIR_DALEN`
-   改成那台電腦上實際的資料夾路徑。
+   改成那台電腦上實際的資料夾路徑；
+   **`API_BASE` 要是 `https://sansoon-api-702692123354.asia-east1.run.app`**
+   （舊的 `everbest.onrender.com` 遲早會關掉；指著它的話啟動時日誌會出現警告）。
 4. 在那台電腦執行一次 `install-task.ps1` 註冊排程。
 5. 原本這台電腦如果不再需要，執行 `Unregister-ScheduledTask -TaskName 三順派遣單自動匯入` 停掉，
    避免兩台同時匯入（同時跑其實也不會產生重複資料，但日誌會比較亂）。
@@ -113,4 +118,4 @@ powershell -ExecutionPolicy Bypass -File C:\Claude\route-scheduler\tools\auto-im
 - 檔案還在寫入時（大小或時間戳還在變）會等下一輪，不會匯入到半截的檔案。
 - 同時只允許一個監看程式執行（`watch.lock`）；重複啟動的那個會自己結束，
   否則兩邊共用狀態檔會互相覆蓋而重覆匯入。
-- 上一輪還沒跑完就不會開下一輪（Render 冷啟動可能要 30–60 秒）。
+- 上一輪還沒跑完就不會開下一輪（雲端冷啟動可能要一兩秒，網路不順時更久）。
