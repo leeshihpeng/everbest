@@ -49,7 +49,7 @@ function MainDirectory() {
   const isAdmin = !!staff?.roles.includes("ADMIN");
   // 貨運派遣是倉管的作業，內勤（ADMIN）需要查看；一般物流主管不列入
   const canCarrierDispatch = !!staff && (staff.roles.includes("WAREHOUSE") || staff.roles.includes("ADMIN"));
-  // 物流主管（派遣單勾選與指派）改成主目錄的獨立入口；倉管進去是唯讀
+  // 物流管理（派遣單與貨品統計）是主目錄的獨立入口；倉管進去是唯讀
   const canLogiManager = !!staff && (staff.roles.includes("MANAGER") || staff.roles.includes("WAREHOUSE"));
 
   // 只送貨的人在主目錄沒有其他可選項目，直接帶到今日配送名單
@@ -62,7 +62,7 @@ function MainDirectory() {
     to: string; color: string; soft: string; show: boolean;
   }[] = [
     { key: "admin", label: "內勤後台", sub: "客戶／人員／派遣單", icon: Building2, image: "/tiles/admin.png", to: "/admin", color: C.navy, soft: "#EDEFF2", show: isAdmin },
-    { key: "logi", label: "物流管理", sub: "派遣單勾選與指派", icon: Map, image: "/tiles/logi.png", to: "/logi/manager", color: C.logiAccent, soft: C.logiAccentSoft, show: canLogiManager },
+    { key: "logi", label: "物流管理", sub: "派遣單與貨品統計", icon: Map, image: "/tiles/logi.png", to: "/logi/manager", color: C.logiAccent, soft: C.logiAccentSoft, show: canLogiManager },
     // 原本是「路線排程系統 → 業務模式 → 勾選客戶」，中間那個 ICON 只是多點一下，
     // 因此主目錄直接進到勾選客戶的畫面。
     { key: "biz", label: "路線排程系統", sub: "勾選客戶產生路線", icon: Map, image: "/tiles/biz.png", to: "/biz", color: C.bizAccent, soft: C.bizAccentSoft, show: !!staff?.roles.includes("SALES") },

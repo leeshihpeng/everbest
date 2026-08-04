@@ -154,7 +154,7 @@ export default function DriverRoute() {
     [orders, completed]
   );
 
-  // 今日派遣單清單依縣市分區，順序同派遣單勾選（台北→新北→基隆→桃園→其他）
+  // 今日派遣單清單依縣市分區，順序即送貨順序（台北→新北→基隆→桃園→其他）
   const cityGroups = useMemo(() => {
     const map = new Map<string, Order[]>();
     for (const o of orders) {

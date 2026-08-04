@@ -129,7 +129,7 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
     }
   }
 
-  // 自家配送的清單依縣市分開（順序同派遣單勾選：台北→新北→基隆→桃園→其他），
+  // 自家配送的清單依縣市分開（送貨順序：台北→新北→基隆→桃園→其他），
   // 貨運行的單子送到全台各地，分區沒有意義，維持單一清單。
   const cityGroups = useMemo(() => {
     if (!isSelf) return [["", orders] as [string, Order[]]];
@@ -198,7 +198,8 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
             {isSelf && importResult.unassignedCount > 0 && (
               <div style={{ color: C.danger }} className="mt-1">
                 有 {importResult.unassignedCount} 筆找不到對應的送貨人員，已留在「待處理」。
-                請到「人員」設定各送貨人員的配送縣市，或在物流管理的派遣單勾選手動指派。
+                請到「人員」設定各送貨人員的配送縣市（不勾任何縣市＝後備，接收其他所有縣市），
+                再到物流管理首頁按「重新指派」。
               </div>
             )}
             <div className="mt-0.5">偵測到的 CSV 欄位：{importResult.detectedHeaders.join("、")}</div>

@@ -244,7 +244,7 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
             data: {
               orderId: unassignedIds[0],
               staffId: m.id,
-              message: `有 ${unassignedIds.length} 筆派遣單找不到對應的送貨人員，請到派遣單勾選手動指派`,
+              message: `有 ${unassignedIds.length} 筆派遣單找不到對應的送貨人員，請確認配送縣市設定後按「重新指派」`,
             },
           });
         }

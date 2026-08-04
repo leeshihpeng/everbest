@@ -10,7 +10,8 @@ export function cityOrderIndex(city: string): number {
   return idx === -1 ? TAIWAN_CITIES.length : idx;
 }
 
-/** 派遣單勾選的分區順序，是使用者指定的送貨慣用順序，**不是**由北到南（基隆排在新北之後）。
+/** 派遣單分區與送貨路線的順序，是使用者指定的送貨慣用順序，**不是**由北到南（基隆排在新北之後）。
+ *  後端 `services/driverAssignment.ts` 有同一份，改動時兩邊一起改。
  *  不在清單內的縣市一律歸「其他」，排最後。 */
 export const DISPATCH_CITIES = ["台北市", "新北市", "基隆市", "桃園市"];
 export const OTHER_CITY = "其他";
