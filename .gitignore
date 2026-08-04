@@ -21,3 +21,6 @@ apps/api/prisma/dev.db-journal
 # 編輯器/系統
 .DS_Store
 *.log
+
+.vercel
+.env*

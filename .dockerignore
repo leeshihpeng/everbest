@@ -1,0 +1,28 @@
+# 建置映像時不要送進 build context 的東西
+
+# 相依套件與建置產物（映像內會重新安裝／建置）
+node_modules
+**/node_modules
+dist
+**/dist
+
+# 前端不在這個映像裡
+apps/web
+
+# 本機工具與設定
+tools
+.claude
+.vercel
+.git
+.gitignore
+
+# 機密：apps/api/.env 內有正式資料庫連線字串與金鑰，絕對不能進映像
+.env
+.env.*
+**/.env
+**/.env.*
+
+# 其他
+*.log
+*.md
+reference
