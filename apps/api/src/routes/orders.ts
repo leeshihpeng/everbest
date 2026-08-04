@@ -6,6 +6,7 @@ import { parseDispatchOrderCsv, groupOrderRowsByCustomer, getCsvHeaders } from "
 import { geocodeAddress } from "../services/googleMaps";
 import { optimizeRoute } from "../services/routeOptimizer";
 import { pushLineMessage, formatRouteShareMessage } from "../services/lineNotify";
+import { loadDrivers, pickDriver, resequenceByCity } from "../services/driverAssignment";
 import { rolesToArray } from "../utils/roles";
 
 const prisma = new PrismaClient();
@@ -42,7 +43,9 @@ async function notifyOrderStakeholders(orderId: string, message: string, assigne
 }
 
 // 未指定 carrier 時只回自家配送（SELF），確保原有的物流主管／送貨人員流程
-// 不會混入交給貨運行的派遣單
+// 不會混入交給貨運行的派遣單。
+// 已刪除（CANCELLED）的單子預設不回傳，除非明確指定 status=CANCELLED——
+// 內勤後台要能查到被刪掉的單子，其他畫面則當它不存在。
 ordersRouter.get("/", async (req, res, next) => {
   try {
     const { date, status, carrier } = req.query as { date?: string; status?: string; carrier?: string };
@@ -50,7 +53,7 @@ ordersRouter.get("/", async (req, res, next) => {
       where: {
         carrier: carrier || "SELF",
         ...(date ? { deliveryDate: new Date(date) } : {}),
-        ...(status ? { status: status as any } : {}),
+        ...(status ? { status: status as any } : { status: { not: "CANCELLED" } }),
       },
       include: { items: true },
       orderBy: { routeSequence: "asc" },
@@ -112,6 +115,12 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
     let updated = 0;
     let skipped = 0;
 
+    // 自家配送的單子在匯入當下就直接指派給送貨人員（依收件地址的縣市），
+    // 不再停在「待處理」等物流管理勾選。分工設定在 Staff.dispatchCities。
+    const drivers = carrier === "SELF" ? await loadDrivers() : [];
+    const touchedDriverIds = new Set<string>();
+    let unassignedCount = 0;
+
     for (const g of grouped) {
       if (!g.header.customerName || !g.header.address || !g.header.deliveryDate) {
         errors.push(`${g.header.customerCode}: 缺少客戶名稱、住址或送貨日期，請確認 CSV 欄位名稱與範本一致（略過此筆）`);
@@ -127,16 +136,24 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
         continue;
       }
       // 自動匯入會重覆送同一天的檔案（ERP 每天覆蓋同一個檔名，中途還可能追加單子），
-      // 因此以「配送方式＋送貨日期＋客戶代號」當同一張派遣單：
-      //   已存在且還沒開始作業（PENDING）→ 更新內容；已勾選／已檢貨／已完成 → 不動它，只回報略過。
+      // 因此以「配送方式＋送貨日期＋客戶代號」當同一張派遣單。
       // 沒有這層判斷的話，自動匯入每跑一次就會多一份重複的派遣單。
       const existing = await prisma.dispatchOrder.findFirst({
         where: { carrier, deliveryDate, customerCode: g.header.customerCode },
+        include: { items: true },
       });
 
-      if (existing && existing.status !== "PENDING") {
-        skipped++;
-        continue;
+      if (existing) {
+        // 更新會整批重建品項（deleteMany + create），檢貨勾選會跟著被清掉，
+        // 所以只有「還沒有人動過」的單子才更新內容：
+        //   - 已檢貨／已派送／已完成 → 保護現場作業，不動
+        //   - 已刪除（CANCELLED）→ 那是有人刻意拿掉的，不能因為重新匯入又長回來
+        const untouched =
+          (existing.status === "PENDING" || existing.status === "SELECTED") && !existing.items.some((i) => i.checked);
+        if (!untouched) {
+          skipped++;
+          continue;
+        }
       }
 
       // 交給貨運行的派遣單不需要座標（不做路線規劃、不導航），省下 geocode 呼叫。
@@ -158,23 +175,82 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
         lng: coords?.lng ?? existing?.lng ?? undefined,
       };
 
+      // 依收件地址的縣市決定送貨人員。找不到對應的人（例如還沒設定分工）就維持
+      // 「待處理」不指派，讓物流管理的勾選畫面接手——寧可讓主管補指派，
+      // 也不要塞給不負責那個區域的人。
+      const driver = carrier === "SELF" ? pickDriver(g.header.address, drivers) : null;
+      const assignment =
+        carrier === "SELF"
+          ? driver
+            ? { status: "SELECTED", assignedDriverId: driver.id }
+            : { status: "PENDING", assignedDriverId: null }
+          : {};
+      if (carrier === "SELF") {
+        if (driver) touchedDriverIds.add(driver.id);
+        else unassignedCount++;
+      }
+
       if (existing) {
         await prisma.dispatchOrder.update({
           where: { id: existing.id },
-          data: { ...data, items: { deleteMany: {}, create: g.items } },
+          // 已經指派過的單子不重新指派：主管可能手動改過送貨人員，
+          // 重新匯入不該把那個調整蓋掉。只有還沒指派的才套用自動指派。
+          data: {
+            ...data,
+            ...(existing.assignedDriverId ? {} : assignment),
+            items: { deleteMany: {}, create: g.items },
+          },
         });
+        if (existing.assignedDriverId) touchedDriverIds.add(existing.assignedDriverId);
         updated++;
       } else {
-        const order = await prisma.dispatchOrder.create({ data: { ...data, items: { create: g.items } } });
+        const order = await prisma.dispatchOrder.create({
+          data: { ...data, ...assignment, items: { create: g.items } },
+        });
         created.push(order.id);
       }
     }
 
-    // 5.4：新增時除了通知所有物流主管，也直接廣播給所有送貨人員（此時尚未指派特定人員）
-    // 整批匯入只發一則通知，避免匯入多筆時洗版。
+    // 依縣市重排每位被動到的送貨人員的路線順序（台北→新北→基隆→桃園→其他）
+    for (const driverId of touchedDriverIds) {
+      await resequenceByCity(driverId);
+    }
+
+    // 匯入即指派，所以通知改成「指派給你」而不是「待確認」，並且只發給實際被指派的人。
+    // 整批匯入每個人只發一則通知，避免匯入多筆時洗版。
     // 交給貨運行的派遣單不經送貨人員，不發這則通知。
     if (created.length > 0 && carrier === "SELF") {
-      await notifyOrderStakeholders(created[created.length - 1], `今天有 ${created.length} 筆新派遣單待確認`, null);
+      const newOrders = await prisma.dispatchOrder.findMany({
+        where: { id: { in: created } },
+        select: { id: true, assignedDriverId: true },
+      });
+
+      const byDriver = new Map<string, string[]>();
+      const unassignedIds: string[] = [];
+      for (const o of newOrders) {
+        if (!o.assignedDriverId) unassignedIds.push(o.id);
+        else byDriver.set(o.assignedDriverId, [...(byDriver.get(o.assignedDriverId) ?? []), o.id]);
+      }
+
+      for (const [driverId, ids] of byDriver) {
+        await prisma.notification.create({
+          data: { orderId: ids[0], staffId: driverId, message: `今天有 ${ids.length} 筆派遣單已指派給你` },
+        });
+      }
+      // 沒能自動指派的單子要讓主管知道，否則會靜靜卡在「待處理」沒人發現。
+      // 只通知主管——這是分工設定的問題，廣播給送貨人員只會造成困惑。
+      if (unassignedIds.length > 0) {
+        const managers = (await prisma.staff.findMany()).filter((s) => rolesToArray(s.roles).includes("MANAGER"));
+        for (const m of managers) {
+          await prisma.notification.create({
+            data: {
+              orderId: unassignedIds[0],
+              staffId: m.id,
+              message: `有 ${unassignedIds.length} 筆派遣單找不到對應的送貨人員，請到派遣單勾選手動指派`,
+            },
+          });
+        }
+      }
     }
 
     // 貨運行派遣單每天重新上傳（同一天可分多次上傳、全部累積），
@@ -199,6 +275,8 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
       orderIds: created,
       updatedCount: updated,
       skippedCount: skipped,
+      // 沒能自動指派的筆數：不是 0 就代表分工設定有缺口，畫面要講出來
+      unassignedCount,
       purged,
       // 讓內勤一眼看出附註有沒有真的帶進來（曾發生匯出檔欄位錯位而整批沒帶到）
       noteCount: grouped.filter((g) => g.header.orderNote).length,
@@ -261,6 +339,8 @@ ordersRouter.post("/select", requireRole("MANAGER"), async (req, res, next) => {
             isPriority: priorityOrderIds.includes(id),
             assignedDriverId: driverId,
             routeSequence: idx,
+            // 主管重新指派＝這趟要送，把送貨人員先前「不送」的勾選還原
+            inRoute: true,
           },
         })
       )
@@ -271,7 +351,7 @@ ordersRouter.post("/select", requireRole("MANAGER"), async (req, res, next) => {
     if (unroutedOrders.length > 0) {
       await prisma.dispatchOrder.updateMany({
         where: { id: { in: unroutedOrders.map((o) => o.id) } },
-        data: { status: "SELECTED", assignedDriverId: driverId },
+        data: { status: "SELECTED", assignedDriverId: driverId, inRoute: true },
       });
     }
 
@@ -370,11 +450,14 @@ ordersRouter.put("/route-order", async (req: AuthedRequest, res, next) => {
   }
 });
 
-// 更新派遣單狀態（例如送貨人員標記完成、貨運派遣頁取消「已交貨運行」退回 PENDING）
+// 更新派遣單狀態（例如送貨人員標記完成、貨運派遣頁取消「已交貨運行」退回 PENDING、
+// 送貨人員／倉管把不需要送的單子標成已刪除 CANCELLED）
+const SETTABLE_STATUSES = ["PENDING", "SELECTED", "DISPATCHED", "COMPLETED", "CANCELLED"] as const;
+
 ordersRouter.patch("/:id/status", async (req: AuthedRequest, res, next) => {
   try {
-    const { status } = req.body as { status: "PENDING" | "DISPATCHED" | "COMPLETED" };
-    if (status !== "PENDING" && status !== "DISPATCHED" && status !== "COMPLETED") {
+    const { status } = req.body as { status: (typeof SETTABLE_STATUSES)[number] };
+    if (!SETTABLE_STATUSES.includes(status)) {
       return res.status(400).json({ error: "狀態值不正確" });
     }
 
@@ -382,6 +465,23 @@ ordersRouter.patch("/:id/status", async (req: AuthedRequest, res, next) => {
     if (!check.ok) return res.status(check.status).json({ error: check.error });
 
     const order = await prisma.dispatchOrder.update({ where: { id: req.params.id }, data: { status } });
+    res.json(order);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 送貨人員勾選「這趟要不要送」。取消勾選的單子仍留在名單上（改天再送），
+// 只是不排進路線與導航，跟「刪除」（CANCELLED）是兩回事。
+ordersRouter.patch("/:id/in-route", async (req: AuthedRequest, res, next) => {
+  try {
+    const { inRoute } = req.body as { inRoute: boolean };
+    if (typeof inRoute !== "boolean") return res.status(400).json({ error: "勾選狀態值不正確" });
+
+    const check = await assertCanModifyOrder(req, req.params.id);
+    if (!check.ok) return res.status(check.status).json({ error: check.error });
+
+    const order = await prisma.dispatchOrder.update({ where: { id: req.params.id }, data: { inRoute } });
     res.json(order);
   } catch (err) {
     next(err);

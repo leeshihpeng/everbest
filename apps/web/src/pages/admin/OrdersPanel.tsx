@@ -6,10 +6,15 @@ import { C, Checkbox, ProductSummary, QtySubtotal, sumQty, DispatchDateTag } fro
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "待處理",
-  SELECTED: "已勾選配送",
+  SELECTED: "已指派",
   DISPATCHED: "已檢貨",
   COMPLETED: "已完成",
+  CANCELLED: "已刪除",
 };
+
+// 「已刪除」不在預設清單裡（後端沒指定 status 時就不回傳），
+// 要另外選才看得到——送貨人員或倉管拿掉的單子在這裡查得到。
+const STATUS_FILTERS = ["", "PENDING", "SELECTED", "DISPATCHED", "COMPLETED", "CANCELLED"];
 
 interface OrderItem {
   productName: string;
@@ -47,6 +52,7 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
     createdCount: number;
     purged: number;
     noteCount: number;
+    unassignedCount: number;
     errors: string[];
     detectedHeaders: string[];
   } | null>(null);
@@ -186,6 +192,13 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
             新增 {importResult.createdCount} 筆派遣單
             {importResult.purged > 0 && `・已清除非今日上傳的舊派遣單 ${importResult.purged} 筆`}
             ・帶入貨單附註 {importResult.noteCount} 筆
+            {/* 自動指派有缺口時一定要講出來，否則單子會安靜地卡在「待處理」沒人送 */}
+            {isSelf && importResult.unassignedCount > 0 && (
+              <div style={{ color: C.danger }} className="mt-1">
+                有 {importResult.unassignedCount} 筆找不到對應的送貨人員，已留在「待處理」。
+                請到「人員」設定各送貨人員的配送縣市，或在物流管理的派遣單勾選手動指派。
+              </div>
+            )}
             <div className="mt-0.5">偵測到的 CSV 欄位：{importResult.detectedHeaders.join("、")}</div>
             {importResult.errors.length > 0 && (
               <div style={{ color: C.danger }} className="mt-1">
@@ -201,8 +214,8 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
       </div>
       )}
 
-      <div className="flex gap-2 mb-3">
-        {["", "PENDING", "SELECTED", "DISPATCHED", "COMPLETED"].map((s) => (
+      <div className="flex gap-2 mb-3 flex-wrap">
+        {STATUS_FILTERS.map((s) => (
           <button
             key={s}
             onClick={() => setStatus(s)}
@@ -213,6 +226,11 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
           </button>
         ))}
       </div>
+      {status === "CANCELLED" && (
+        <div className="text-[11px] mb-2" style={{ color: C.muted }}>
+          這些是送貨人員或倉管拿掉的派遣單。自動匯入不會把它們加回來；確定不需要了可以在這裡真的刪除。
+        </div>
+      )}
 
       {error && <div className="text-[12px] mb-2" style={{ color: C.danger }}>{error}</div>}
 

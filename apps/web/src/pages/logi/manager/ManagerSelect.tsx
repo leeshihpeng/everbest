@@ -364,7 +364,16 @@ export default function ManagerSelect() {
         })}
         {orders.length === 0 && (
           <div className="text-center text-[13px] py-8" style={{ color: C.muted }}>
-            目前沒有待處理派遣單
+            <div>目前沒有待處理派遣單</div>
+            {/* 匯入即自動指派後，這一頁平常本來就會是空的。
+                不講清楚的話，主管會以為系統壞了或是派遣單沒進來。 */}
+            <div className="text-[11px] mt-2 leading-relaxed px-4">
+              派遣單上傳後會依收件地址的縣市<b>直接指派給送貨人員</b>，不需要在這裡勾選。
+              <br />
+              只有找不到對應送貨人員的單子才會留在這一頁，等你手動指派。
+              <br />
+              要調整分工請到內勤後台「人員」設定各送貨人員的配送縣市。
+            </div>
           </div>
         )}
       </div>

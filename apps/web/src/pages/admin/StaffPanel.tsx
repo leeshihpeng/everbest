@@ -15,6 +15,7 @@ interface Staff {
   homeLat?: number | null;
   lineGroupId?: string;
   salesRegions?: string[];
+  dispatchCities?: string[]; // 送貨人員負責的配送縣市；空＝後備（接收其他所有縣市）
 }
 
 export default function StaffPanel() {
@@ -33,6 +34,11 @@ export default function StaffPanel() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editRegions, setEditRegions] = useState<Set<string>>(new Set());
   const [savingRegions, setSavingRegions] = useState(false);
+
+  // 配送縣市與業務範圍是兩組獨立設定（李恭戎兩者都有），所以編輯狀態也分開
+  const [editingCitiesId, setEditingCitiesId] = useState<string | null>(null);
+  const [editCities, setEditCities] = useState<Set<string>>(new Set());
+  const [savingCities, setSavingCities] = useState(false);
 
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeResult, setGeocodeResult] = useState<{ total: number; updated: number; failed: number; errors: string[] } | null>(null);
@@ -86,6 +92,31 @@ export default function StaffPanel() {
       setError((err as Error).message);
     } finally {
       setSavingRegions(false);
+    }
+  }
+
+  function toggleEditCity(city: string) {
+    const s = new Set(editCities);
+    s.has(city) ? s.delete(city) : s.add(city);
+    setEditCities(s);
+  }
+
+  function startEditCities(s: Staff) {
+    setEditingCitiesId(s.id);
+    setEditCities(new Set(s.dispatchCities ?? []));
+  }
+
+  async function handleSaveCities(id: string) {
+    setSavingCities(true);
+    setError(null);
+    try {
+      await api.updateStaff(id, { dispatchCities: Array.from(editCities) });
+      setEditingCitiesId(null);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSavingCities(false);
     }
   }
 
@@ -289,6 +320,13 @@ export default function StaffPanel() {
                       業務範圍：{s.salesRegions && s.salesRegions.length > 0 ? s.salesRegions.join("、") : "不限制"}
                     </div>
                   )}
+                  {/* 派遣單匯入時就是依這個設定自動指派，所以要一眼看得到目前的分工 */}
+                  {s.roles.includes("DRIVER") && editingCitiesId !== s.id && (
+                    <div style={{ color: C.muted }} className="text-[11px] mt-1">
+                      配送縣市：
+                      {s.dispatchCities && s.dispatchCities.length > 0 ? s.dispatchCities.join("、") : "其他全部（後備）"}
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   {s.roles.includes("SALES") && (
@@ -298,6 +336,15 @@ export default function StaffPanel() {
                       className="text-[11px] font-bold px-2 py-1"
                     >
                       {editingId === s.id ? "取消" : "編輯範圍"}
+                    </button>
+                  )}
+                  {s.roles.includes("DRIVER") && (
+                    <button
+                      onClick={() => (editingCitiesId === s.id ? setEditingCitiesId(null) : startEditCities(s))}
+                      style={{ color: C.logiAccent }}
+                      className="text-[11px] font-bold px-2 py-1"
+                    >
+                      {editingCitiesId === s.id ? "取消" : "配送縣市"}
                     </button>
                   )}
                   <button
@@ -343,6 +390,39 @@ export default function StaffPanel() {
                     className="text-white text-[11px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-60"
                   >
                     {savingRegions ? "儲存中…" : "儲存範圍"}
+                  </button>
+                </div>
+              )}
+              {editingCitiesId === s.id && (
+                <div className="mt-2 rounded-lg p-2" style={{ background: C.bg }}>
+                  <div style={{ color: C.muted }} className="text-[11px] mb-1.5 leading-relaxed">
+                    派遣單匯入時會依收件地址的縣市自動指派給對應的人。
+                    <b>都不勾＝後備</b>，接收其他人沒認領的所有縣市。
+                    每個縣市只會有一個人接到，重複指定同一個縣市時以人員建立順序較早者為準。
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {TAIWAN_CITIES.map((city) => (
+                      <button
+                        key={city}
+                        onClick={() => toggleEditCity(city)}
+                        style={
+                          editCities.has(city)
+                            ? { background: C.logiAccent, color: "#fff", borderColor: C.logiAccent }
+                            : { color: C.muted, borderColor: C.hairline, background: "#fff" }
+                        }
+                        className="px-2 py-1 rounded-full text-[11px] font-medium border"
+                      >
+                        {city}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => handleSaveCities(s.id)}
+                    disabled={savingCities}
+                    style={{ background: C.logiAccent }}
+                    className="text-white text-[11px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-60"
+                  >
+                    {savingCities ? "儲存中…" : "儲存配送縣市"}
                   </button>
                 </div>
               )}

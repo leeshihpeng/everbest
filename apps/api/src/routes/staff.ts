@@ -15,7 +15,17 @@ staffRouter.use(requireAuth);
 staffRouter.get("/", async (req: AuthedRequest, res, next) => {
   try {
     const staff = await prisma.staff.findMany({
-      select: { id: true, name: true, roles: true, homeAddress: true, homeLat: true, homeLng: true, lineGroupId: true, salesRegions: true },
+      select: {
+        id: true,
+        name: true,
+        roles: true,
+        homeAddress: true,
+        homeLat: true,
+        homeLng: true,
+        lineGroupId: true,
+        salesRegions: true,
+        dispatchCities: true,
+      },
     });
 
     // 住家地址與 LINE 群組屬個資／內部資訊：主管與內勤看得到全部；
@@ -25,7 +35,13 @@ staffRouter.get("/", async (req: AuthedRequest, res, next) => {
 
     res.json(
       staff.map((s) => {
-        const base = { ...s, roles: rolesToArray(s.roles), salesRegions: s.salesRegions ? s.salesRegions.split(",") : [] };
+        // 配送縣市是工作分工不是個資，跟角色一樣不遮蔽
+        const base = {
+          ...s,
+          roles: rolesToArray(s.roles),
+          salesRegions: s.salesRegions ? s.salesRegions.split(",") : [],
+          dispatchCities: s.dispatchCities ? s.dispatchCities.split(",").filter(Boolean) : [],
+        };
         if (seesAll || s.id === req.staff?.id) return base;
         return { ...base, homeAddress: "", homeLat: null, homeLng: null, lineGroupId: null, salesRegions: [] };
       })
@@ -37,13 +53,14 @@ staffRouter.get("/", async (req: AuthedRequest, res, next) => {
 
 staffRouter.post("/", requireRole("ADMIN"), async (req, res, next) => {
   try {
-    const { name, roles, homeAddress, lineGroupId, password, salesRegions } = req.body as {
+    const { name, roles, homeAddress, lineGroupId, password, salesRegions, dispatchCities } = req.body as {
       name: string;
       roles: StaffRole[];
       homeAddress: string;
       lineGroupId?: string;
       password: string;
       salesRegions?: string[];
+      dispatchCities?: string[];
     };
 
     // 規格書 3.2：物流主管與送貨人員為互斥角色
@@ -67,6 +84,8 @@ staffRouter.post("/", requireRole("ADMIN"), async (req, res, next) => {
         homeLat: coords?.lat,
         homeLng: coords?.lng,
         salesRegions: salesRegions && salesRegions.length > 0 ? salesRegions.join(",") : null,
+        // 只有送貨人員用得到；不是送貨人員就留 null，免得日後誤判成後備送貨人員
+        dispatchCities: roles.includes("DRIVER") ? (dispatchCities ?? []).join(",") : null,
       },
     });
 
@@ -137,12 +156,13 @@ staffRouter.post("/:id/reset-password", requireRole("ADMIN"), async (req, res, n
 
 staffRouter.put("/:id", requireRole("ADMIN"), async (req, res, next) => {
   try {
-    const { name, roles, homeAddress, lineGroupId, salesRegions } = req.body as {
+    const { name, roles, homeAddress, lineGroupId, salesRegions, dispatchCities } = req.body as {
       name?: string;
       roles?: StaffRole[];
       homeAddress?: string;
       lineGroupId?: string;
       salesRegions?: string[];
+      dispatchCities?: string[];
     };
 
     if (roles && !validateStaffRoles(roles as any)) {
@@ -154,6 +174,9 @@ staffRouter.put("/:id", requireRole("ADMIN"), async (req, res, next) => {
       roles: roles ? rolesToString(roles) : undefined,
       lineGroupId,
       salesRegions: salesRegions ? (salesRegions.length > 0 ? salesRegions.join(",") : null) : undefined,
+      // 空陣列要存成空字串而不是 undefined：那代表「後備，接收其他所有縣市」，
+      // 是一個有意義的設定，不能被當成「這次沒有要改」而略過。
+      dispatchCities: dispatchCities ? dispatchCities.join(",") : undefined,
     };
     if (homeAddress) {
       updateData.homeAddress = homeAddress;
@@ -165,7 +188,13 @@ staffRouter.put("/:id", requireRole("ADMIN"), async (req, res, next) => {
     }
 
     const staff = await prisma.staff.update({ where: { id: req.params.id }, data: updateData });
-    res.json({ id: staff.id, name: staff.name, roles: rolesToArray(staff.roles), salesRegions: staff.salesRegions ? staff.salesRegions.split(",") : [] });
+    res.json({
+      id: staff.id,
+      name: staff.name,
+      roles: rolesToArray(staff.roles),
+      salesRegions: staff.salesRegions ? staff.salesRegions.split(",") : [],
+      dispatchCities: staff.dispatchCities ? staff.dispatchCities.split(",").filter(Boolean) : [],
+    });
   } catch (err) {
     next(err);
   }

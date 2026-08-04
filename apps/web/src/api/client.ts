@@ -175,8 +175,15 @@ export const api = {
       unroutedCount: number;
       unroutedOrderNames: string[];
     }>("/orders/select", { method: "POST", body: JSON.stringify(body) }),
-  updateOrderStatus: (id: string, status: "PENDING" | "DISPATCHED" | "COMPLETED") =>
+  updateOrderStatus: (id: string, status: "PENDING" | "SELECTED" | "DISPATCHED" | "COMPLETED" | "CANCELLED") =>
     request(`/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  // 送貨人員／倉管把不需要送的單子拿掉。標成 CANCELLED 而不是真的刪除，
+  // 否則自動匯入重讀同一份 ERP 檔案時會把它加回來。
+  cancelOrder: (id: string) =>
+    request(`/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status: "CANCELLED" }) }),
+  // 送貨人員勾選這趟要不要送（不送的單子留在名單上，只是不排進路線）
+  setOrderInRoute: (id: string, inRoute: boolean) =>
+    request(`/orders/${id}/in-route`, { method: "PATCH", body: JSON.stringify({ inRoute }) }),
   // 送貨人員自行調整送貨順序；manual=false＝還原成系統自動排序
   updateRouteOrder: (orderIds: string[], manual = true) =>
     request<{ updated: number; manual: boolean }>("/orders/route-order", {
@@ -195,8 +202,12 @@ export const api = {
     return uploadFile<{
       createdCount: number;
       orderIds: string[];
+      updatedCount: number;
+      skippedCount: number;
       purged: number;
       noteCount: number;
+      // 自家配送找不到對應送貨人員、留在「待處理」的筆數
+      unassignedCount: number;
       errors: string[];
       detectedHeaders: string[];
     }>("/orders/import", fd);

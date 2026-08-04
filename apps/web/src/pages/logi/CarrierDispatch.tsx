@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Truck, Check } from "lucide-react";
+import { Truck, Check, Trash2 } from "lucide-react";
 import { api } from "../../api/client";
 import { C, TopBar, ProductSummary, QtySubtotal, sumQty, TileGrid, Tile } from "../../components/common";
 
@@ -117,6 +117,22 @@ export default function CarrierDispatch() {
     }
   }
 
+  // 刪除不需要交的單子。標成已刪除而不是真的刪掉——自動匯入會重讀同一份託運報表，
+  // 真刪掉的單子下一輪就會再長回來。這裡沒有勾選，一次刪一筆。
+  async function handleDelete(o: Order) {
+    if (!confirm(`確定要刪除「${o.customerName}」這筆派遣單嗎？`)) return;
+    setBusyId(o.id);
+    setError(null);
+    try {
+      await api.cancelOrder(o.id);
+      setOrders((prev) => prev.filter((x) => x.id !== o.id));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   // 貨品總計只算還沒交出去的，交完的不必再清點
   const summaryOrders = useMemo(() => orders.filter((o) => o.status !== "COMPLETED"), [orders]);
   const summaryItems = useMemo(() => summaryOrders.flatMap((o) => o.items), [summaryOrders]);
@@ -209,7 +225,16 @@ export default function CarrierDispatch() {
                     {o.items.length > 0 && <QtySubtotal total={sumQty(o.items)} accent={C.logiAccent} />}
                   </div>
 
-                  <div className="flex justify-end mt-2">
+                  <div className="flex items-center justify-end gap-2 mt-2">
+                    {/* 刪除放在左邊、用文字而非只有圖示，避免跟右邊的主要動作混淆 */}
+                    <button
+                      onClick={() => handleDelete(o)}
+                      disabled={busyId === o.id}
+                      style={{ color: C.danger, border: `1px solid ${C.danger}` }}
+                      className="mr-auto flex items-center gap-1 text-[12px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-60"
+                    >
+                      <Trash2 size={14} /> 刪除
+                    </button>
                     {/* 按鈕文字與顏色跟著「是否已交貨運行」變化：
                         沒按＝白底「交貨運行」，按了＝綠底「✓ 已交貨運行」，再按一次取消 */}
                     <button

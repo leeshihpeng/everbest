@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, RotateCcw, HelpCircle, ChevronUp, ChevronDown } from "lucide-react";
+// Map 要改名匯入：直接叫 Map 會遮蔽內建的 Map 建構子，這個檔案裡到處都在 new Map()
+import { Check, RotateCcw, HelpCircle, ChevronUp, ChevronDown, Trash2, Map as MapIcon } from "lucide-react";
 import { api } from "../../../api/client";
 import { getAuthedStaff, isDriverOnly } from "../../../lib/auth";
-import { C, TopBar, Pill, RouteTimeline, ActionRow, TimelineRoute, ProductSummary, DispatchDateTag, HeaderActions } from "../../../components/common";
+import { dispatchCityOf, dispatchCityIndex } from "../../../lib/taiwanCities";
+import { C, TopBar, Pill, Checkbox, RouteTimeline, ActionRow, TimelineRoute, ProductSummary, QtySubtotal, sumQty, DispatchDateTag, HeaderActions } from "../../../components/common";
 import { buildNavigationUrl } from "../../../lib/googleMapsLoader";
 import { formatRouteShareText, shareRouteText } from "../../../lib/routeShare";
 
@@ -29,6 +31,7 @@ interface Order {
   createdAt?: string; // 派遣單匯入（檔案上傳）的時間
   routeSequence?: number | null;
   routeOrderManual?: boolean;
+  inRoute: boolean; // 這趟要不要送（取消勾選＝留在名單但不排進路線）
 }
 
 interface Staff {
@@ -56,13 +59,16 @@ function HelpPanel() {
   }
 
   const items: [string, string][] = [
+    ["派遣單自動指派", "派遣單一上傳就會依收件地址的縣市直接指派給你，不必等主管勾選。預設順序是台北市→新北市→基隆市→桃園市→其他。"],
+    ["這趟不送的單子", "在下方「今日派遣單」把該客戶的勾選取消，他就不會排進路線與導航，但仍留在名單上，改天要送再勾回來。"],
+    ["刪除單子", "確定不用送的（例如客戶取消）按該列的垃圾桶刪除。刪掉的不會因為系統重新抓檔案又跑回來。"],
     ["調整送貨順序", "按住客戶卡片右上角的把手（⠿）直接往上下拖，拖到要的位置放開即可；拖到畫面上下邊緣會自動捲動。也可以長按卡片任一處進入拖曳，或用 ↑↓ 一次移動一站。"],
     ["順序會自動儲存", "調整後系統會重算各段距離並記住你的順序，關掉App、換手機登入都還在，不會被系統重新排掉。"],
-    ["恢復系統順序", "想回到系統依優先客戶與最短路徑排的建議路線，按路線上方的「恢復系統順序」。"],
+    ["依縣市／最短路徑", "路線上方兩個按鈕：「依縣市」排回台北→新北→基隆→桃園→其他；「最短路徑」改用系統依優先客戶與距離排的建議路線。"],
     ["出發地／目的地", "可切換公司或住家，切換後會重新計算路線。"],
     ["貨單附註", "出貨時如果有交代事項（例如指定收貨時間、送貨方式），會以黃色標示在該客戶的貨品上方。"],
     ["檢貨", "裝車時點各項貨品標記已檢貨；整張單全部檢完會自動變成「已派送」。"],
-    ["配送完成", "送達後在下方「配送完成標記」勾選該客戶，該站會從路線中移除。"],
+    ["配送完成", "送達後在「今日派遣單」按該列的「待完成」切換成已完成，該站會從路線中移除。"],
     ["開始導航", "按最下方「開始導航」會照目前順序開啟 Google 地圖導航。"],
   ];
 
@@ -142,7 +148,22 @@ export default function DriverRoute() {
     // 未讀通知數改由標題列的 HeaderActions 自己抓
   }, []);
 
-  const assignedOrders = useMemo(() => orders.filter((o) => !completed.has(o.id)), [orders, completed]);
+  // 排進路線的條件：還沒送完，而且送貨人員這趟有勾選要送
+  const assignedOrders = useMemo(
+    () => orders.filter((o) => !completed.has(o.id) && o.inRoute),
+    [orders, completed]
+  );
+
+  // 今日派遣單清單依縣市分區，順序同派遣單勾選（台北→新北→基隆→桃園→其他）
+  const cityGroups = useMemo(() => {
+    const map = new Map<string, Order[]>();
+    for (const o of orders) {
+      const city = dispatchCityOf(o.address);
+      if (!map.has(city)) map.set(city, []);
+      map.get(city)!.push(o);
+    }
+    return [...map.entries()].sort(([a], [b]) => dispatchCityIndex(a) - dispatchCityIndex(b));
+  }, [orders]);
 
   const originPoint = origin === "company" ? { lat: settings?.companyLat, lng: settings?.companyLng } : { lat: self?.homeLat, lng: self?.homeLng };
   const destPoint = destination === "company" ? { lat: settings?.companyLat, lng: settings?.companyLng } : { lat: self?.homeLat, lng: self?.homeLng };
@@ -242,8 +263,8 @@ export default function DriverRoute() {
     void saveOrder(next);
   }
 
-  // 放棄手動順序，回到系統依優先客戶＋最短路徑自動排的路線
-  async function resetOrder() {
+  // 放棄目前順序，改用系統依優先客戶＋最短路徑自動排的路線
+  async function useShortestPath() {
     const ids = route ? route.stops.map((s) => s.refId) : [];
     setManualOrder(null);
     if (ids.length === 0) return;
@@ -255,6 +276,50 @@ export default function DriverRoute() {
       setError((err as Error).message);
     } finally {
       setSavingOrder(false);
+    }
+  }
+
+  // 排回縣市順序（台北→新北→基隆→桃園→其他），同縣市內維持目前順序。
+  // 這是派遣單匯入時的預設順序，拖亂了可以一鍵回來。
+  async function sortByCity() {
+    const current = route ? route.stops.map((s) => s.refId) : [];
+    if (current.length === 0) return;
+    const byId = new Map(orders.map((o) => [o.id, o]));
+    const next = [...current].sort((a, b) => {
+      const ca = dispatchCityIndex(dispatchCityOf(byId.get(a)?.address ?? ""));
+      const cb = dispatchCityIndex(dispatchCityOf(byId.get(b)?.address ?? ""));
+      if (ca !== cb) return ca - cb;
+      return current.indexOf(a) - current.indexOf(b);
+    });
+    await saveOrder(next);
+  }
+
+  // 這趟要不要送。取消勾選的單子留在名單上，只是不排進路線與導航。
+  async function toggleInRoute(o: Order) {
+    const next = !o.inRoute;
+    setOrders((prev) => prev.map((x) => (x.id === o.id ? { ...x, inRoute: next } : x)));
+    // 手動順序是一串 id，被拿掉的站要一起移除，否則恢復勾選時順序會錯亂
+    if (!next) setManualOrder((prev) => (prev ? prev.filter((id) => id !== o.id) : prev));
+    try {
+      await api.setOrderInRoute(o.id, next);
+    } catch (err) {
+      setError((err as Error).message);
+      setOrders((prev) => prev.map((x) => (x.id === o.id ? { ...x, inRoute: o.inRoute } : x)));
+    }
+  }
+
+  // 確定不用送的單子（例如客戶取消）。標成已刪除而不是真的刪掉，
+  // 否則系統下次重新抓 ERP 檔案時會把它加回來。
+  async function handleDelete(o: Order) {
+    if (!confirm(`確定要刪除「${o.customerName}」這筆派遣單嗎？刪除後不會再出現在你的名單上。`)) return;
+    const before = orders;
+    setOrders((prev) => prev.filter((x) => x.id !== o.id));
+    setManualOrder((prev) => (prev ? prev.filter((id) => id !== o.id) : prev));
+    try {
+      await api.cancelOrder(o.id);
+    } catch (err) {
+      setError((err as Error).message);
+      setOrders(before);
     }
   }
 
@@ -359,12 +424,13 @@ export default function DriverRoute() {
         {routeLoading && <div className="text-center text-[13px] py-4" style={{ color: C.muted }}>路線計算中…</div>}
         {routeError && <div className="text-center text-[13px] py-2" style={{ color: C.danger }}>{routeError}</div>}
 
-        {/* 今日要載的貨品總量（含尚未送達的派遣單），方便裝車前清點 */}
-        {orders.length > 0 && (
+        {/* 今日要載的貨品總量，方便裝車前清點。只算這趟真的要送的，
+            取消勾選與已送達的不列入，否則裝車會多帶 */}
+        {assignedOrders.length > 0 && (
           <ProductSummary
             title="今日配送貨品總計"
-            items={orders.flatMap((o) => o.items)}
-            orderCount={orders.length}
+            items={assignedOrders.flatMap((o) => o.items)}
+            orderCount={assignedOrders.length}
             accent={C.logiAccent}
           />
         )}
@@ -379,21 +445,31 @@ export default function DriverRoute() {
                 {route.totalDistanceKm.toFixed(1)} km
               </div>
             </div>
-            <div className="flex items-center justify-between mb-2 gap-2">
-              <div style={{ color: C.muted }} className="text-[11px]">
-                {manualOrder ? "目前是你自行調整的順序" : "按住右上角把手 ⠿ 可拖曳調整順序"}
+            <div className="mb-2">
+              <div style={{ color: C.muted }} className="text-[11px] mb-1.5">
+                按住右上角把手 ⠿ 可拖曳調整順序
                 {savingOrder && "・儲存中…"}
               </div>
-              {manualOrder && (
+              {/* 兩種排序各給一顆按鈕：拖亂了想回到匯入時的縣市順序，
+                  或想改用系統依距離排的建議路線，都不必請主管重新指派 */}
+              <div className="flex gap-2">
                 <button
-                  onClick={resetOrder}
+                  onClick={sortByCity}
                   disabled={savingOrder}
                   style={{ border: `1px solid ${C.logiAccent}`, color: C.logiAccent }}
-                  className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg disabled:opacity-60 shrink-0"
+                  className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg disabled:opacity-60 shrink-0"
                 >
-                  <RotateCcw size={12} /> 恢復系統順序
+                  <MapIcon size={12} /> 依縣市排序
                 </button>
-              )}
+                <button
+                  onClick={useShortestPath}
+                  disabled={savingOrder}
+                  style={{ border: `1px solid ${C.hairline}`, color: C.muted }}
+                  className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg disabled:opacity-60 shrink-0"
+                >
+                  <RotateCcw size={12} /> 改用最短路徑
+                </button>
+              </div>
             </div>
             <RouteTimeline
               originLabel={origin === "company" ? "公司" : "住家"}
@@ -406,33 +482,118 @@ export default function DriverRoute() {
           </>
         )}
 
-        <div style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.muted }} className="text-[12px] font-bold mt-4 mb-2">
-          配送完成標記
+        {/* 今日派遣單：勾選這趟要送哪些、標記送達、刪掉不用送的。
+            依縣市分區，順序與匯入時的預設路線一致，找客戶比較快。 */}
+        <div
+          className="flex items-center justify-between mt-4 mb-2"
+          style={{ fontFamily: "'Noto Sans TC', sans-serif", color: C.muted }}
+        >
+          <span className="text-[12px] font-bold">今日派遣單（依縣市）</span>
+          <span style={{ fontFamily: "Manrope" }} className="text-[11px] font-bold">
+            這趟要送 {assignedOrders.length}／{orders.length} 筆
+          </span>
         </div>
-        {orders.map((o) => (
-          <button
-            key={o.id}
-            onClick={() => toggleDone(o.id)}
-            className="w-full flex items-center gap-2 rounded-xl px-3 py-2 mb-2"
-            style={{ background: "#fff", border: `1px solid ${C.hairline}` }}
-          >
-            <div
-              className="flex items-center justify-center rounded-md"
-              style={{ width: 18, height: 18, border: `2px solid ${completed.has(o.id) ? C.logiAccent : C.hairline}`, background: completed.has(o.id) ? C.logiAccent : "transparent" }}
-            >
-              {completed.has(o.id) && <Check size={12} color="#fff" strokeWidth={3} />}
+        {orders.length > 0 && (
+          <div style={{ color: C.muted }} className="text-[11px] mb-2">
+            取消勾選＝這趟不送（單子留著，改天再送）；垃圾桶＝確定不用送，直接刪除。
+          </div>
+        )}
+
+        {cityGroups.map(([city, group]) => (
+          <div key={city} className="mb-3">
+            <div className="flex items-center justify-between px-3 py-1.5 rounded-lg mb-1.5" style={{ background: C.logiAccentSoft }}>
+              <span style={{ color: C.logiAccent, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[13px] font-bold">
+                {city}
+              </span>
+              <span style={{ color: C.muted, fontFamily: "Manrope" }} className="text-[11px] font-bold">
+                {group.filter((o) => o.inRoute && !completed.has(o.id)).length}／{group.length}
+              </span>
             </div>
-            <span
-              style={{ fontFamily: "'Noto Sans TC', sans-serif", textDecoration: completed.has(o.id) ? "line-through" : "none", color: completed.has(o.id) ? C.muted : C.text }}
-              className="text-[13px] font-semibold flex-1 text-left"
-            >
-              {o.customerName}
-            </span>
-            <DispatchDateTag createdAt={o.createdAt} />
-            <span style={{ color: completed.has(o.id) ? C.logiAccent : C.muted, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[11px] font-bold">
-              {completed.has(o.id) ? "已完成" : "待完成"}
-            </span>
-          </button>
+            {group.map((o) => {
+              const done = completed.has(o.id);
+              const skipped = !o.inRoute;
+              return (
+                <div
+                  key={o.id}
+                  className="rounded-xl px-3 py-2 mb-2"
+                  style={{
+                    background: "#fff",
+                    border: `1px solid ${skipped ? C.hairline : C.logiAccent}`,
+                    opacity: skipped ? 0.6 : 1,
+                  }}
+                >
+                  <div className="flex items-center">
+                    {/* 勾選框本身只有 20×20，直接當按鈕在手機上按不到（返回鍵與拖曳把手都踩過同一個坑）。
+                        外面包一層 44×44 的點擊區，視覺大小不變。 */}
+                    <button
+                      onClick={() => toggleInRoute(o)}
+                      aria-label={o.inRoute ? "這趟不送" : "這趟要送"}
+                      style={{ width: 44, height: 44 }}
+                      className="shrink-0 flex items-center justify-center -ml-2.5"
+                    >
+                      <Checkbox checked={o.inRoute} />
+                    </button>
+                    <div className="flex-1 min-w-0 pl-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span
+                          style={{
+                            fontFamily: "'Noto Sans TC', sans-serif",
+                            textDecoration: done ? "line-through" : "none",
+                            color: done ? C.muted : C.text,
+                          }}
+                          className="text-[13px] font-semibold"
+                        >
+                          {o.customerName}
+                        </span>
+                        <DispatchDateTag createdAt={o.createdAt} />
+                      </div>
+                      <div style={{ color: C.muted }} className="text-[11px] mt-0.5 break-all">
+                        {o.address}
+                      </div>
+                    </div>
+                    {/* 刪除不可逆，跟勾選拉開距離避免在晃動的車上按錯。
+                        44×44 是手機最小可靠點擊尺寸，比圖示本身大一圈 */}
+                    <button
+                      onClick={() => handleDelete(o)}
+                      aria-label="刪除這筆派遣單"
+                      style={{ color: C.danger, width: 44, height: 44 }}
+                      className="shrink-0 flex items-center justify-center"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                  {o.orderNote && (
+                    <div
+                      className="mt-1 text-[11px] px-1.5 py-0.5 rounded"
+                      style={{ background: C.goldSoft, color: C.text, whiteSpace: "pre-wrap" }}
+                    >
+                      <span style={{ color: C.gold }} className="font-bold">
+                        貨單附註：
+                      </span>
+                      {o.orderNote}
+                    </div>
+                  )}
+                  <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                    {o.items.length > 0 && <QtySubtotal total={sumQty(o.items)} accent={C.logiAccent} />}
+                    <button
+                      onClick={() => toggleDone(o.id)}
+                      disabled={skipped}
+                      style={{
+                        minHeight: 44, // 手機可靠點擊的最小尺寸
+                        ...(done
+                          ? { background: C.logiAccent, border: `1px solid ${C.logiAccent}`, color: "#fff" }
+                          : { background: "#fff", border: `1px solid ${C.hairline}`, color: C.muted }),
+                      }}
+                      className="ml-auto flex items-center gap-1 text-[11px] font-bold px-3.5 rounded-lg disabled:opacity-50"
+                    >
+                      {done && <Check size={12} strokeWidth={3} />}
+                      {done ? "已完成" : "待完成"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ))}
         {orders.length === 0 && (
           <div className="text-center text-[13px] py-8" style={{ color: C.muted }}>

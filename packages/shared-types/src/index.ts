@@ -3,7 +3,9 @@
 // MANAGER_VIEW / DRIVER_VIEW：唯讀查看物流主管／送貨人員畫面，但不能勾選派遣單、指派、標記完成
 // WAREHOUSE：倉管（角色細部權限待定，先能指派）
 export type StaffRole = "SALES" | "MANAGER" | "MANAGER_VIEW" | "DRIVER" | "DRIVER_VIEW" | "ADMIN" | "WAREHOUSE";
-export type OrderStatus = "PENDING" | "SELECTED" | "DISPATCHED" | "COMPLETED";
+// CANCELLED：送貨人員／倉管把不需要送的單子「刪除」後的狀態。
+// 刻意不是真的從資料庫刪除——自動匯入會重讀同一份 ERP 檔案，真刪掉的單子隔幾分鐘就會長回來。
+export type OrderStatus = "PENDING" | "SELECTED" | "DISPATCHED" | "COMPLETED" | "CANCELLED";
 
 export interface Customer {
   id: string;
@@ -26,6 +28,9 @@ export interface Staff {
   homeLng?: number;
   lineGroupId?: string;
   salesRegions?: string[]; // 業務人員可選客戶的縣市範圍；空陣列＝不限制
+  /** 送貨人員負責的配送縣市。派遣單匯入時依此自動指派。
+   *  空陣列＝後備人員，接收所有沒被別人指定的縣市。 */
+  dispatchCities?: string[];
 }
 
 export interface SystemSetting {
@@ -51,6 +56,9 @@ export interface DispatchOrder {
   isPriority: boolean; // 本次配送優先標記（與客戶主檔無關）
   assignedDriverId?: string;
   routeSequence?: number;
+  /** 是否納入今日路線。送貨人員可取消勾選「這趟不送」的單子，
+   *  單子仍留在名單上（隔天或改天再送），只是不排進路線與導航。 */
+  inRoute: boolean;
   lat?: number;
   lng?: number;
   items: DispatchOrderItem[];
