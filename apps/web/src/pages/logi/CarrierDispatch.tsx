@@ -3,8 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Truck, Check, Trash2 } from "lucide-react";
 import { api } from "../../api/client";
 import { C, TopBar, ProductSummary, QtySubtotal, sumQty, TileGrid, Tile } from "../../components/common";
-
-const CARRIERS = ["新竹貨運", "大榮貨運"];
+import { CARRIER_VALUES as CARRIERS } from "../../lib/carriers";
 
 interface OrderItem {
   id: string;

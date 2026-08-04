@@ -11,8 +11,11 @@ const prisma = new PrismaClient();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
 export const ordersRouter = Router();
 
-// 交給貨運行配送的派遣單；SELF 代表自家送貨人員
-export const CARRIERS = ["新竹貨運", "大榮貨運"];
+// 交給貨運行或回頭車配送的派遣單；SELF 代表自家送貨人員。
+// 前端 `apps/web/src/lib/carriers.ts` 有同一份，改動時兩邊一起改，
+// 否則匯入會被「配送方式不正確」擋掉。
+// 貨物追蹤（`routes/shipments.ts` 的 CARRIERS）是另一回事——只有新竹與大榮有託運報表，不要一起加。
+export const CARRIERS = ["新竹貨運", "大榮貨運", "永昌貨運", "回頭車"];
 
 /** 今天（台灣時間）零點，換算成 UTC。
  *  Render 主機跑 UTC，直接用 UTC 零點會把台灣清晨 08:00 前上傳的資料誤判成「昨天」。 */

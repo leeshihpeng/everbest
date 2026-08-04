@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ClipboardList, Truck, Layers, AlertTriangle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { api } from "../../../api/client";
 import OrdersPanel from "../../admin/OrdersPanel";
 import { C, TopBar, TileGrid, Tile, ProductSummary, QtySubtotal, sumQty, DispatchDateTag } from "../../../components/common";
+import { DISPATCH_CARRIERS } from "../../../lib/carriers";
 import { dispatchCityOf, dispatchCityIndex } from "../../../lib/taiwanCities";
 import { getAuthedStaff } from "../../../lib/auth";
 
@@ -23,15 +25,21 @@ interface Order {
   items: OrderItem[];
 }
 
-/** 三個出貨管道。北部＝自家送貨人員（只送北部），另外兩個是交給貨運行的。
- *  貨品數量統計就是照這三個管道分開算，最後再加總。 */
-const CHANNELS = [
-  { key: "north", label: "北部", sub: "自家配送", carrier: "SELF", image: "/tiles/logi.png", icon: ClipboardList },
-  { key: "hsinchu", label: "新竹", sub: "新竹貨運", carrier: "新竹貨運", image: "/tiles/carrier.png", icon: Truck },
-  { key: "dalen", label: "大榮", sub: "大榮貨運", carrier: "大榮貨運", image: "/tiles/carrier.png", icon: Truck },
-] as const;
+/** 出貨管道。北部＝自家送貨人員（只送北部），其餘是交給貨運行或回頭車。
+ *  貨品數量統計照管道分開算，最後再加總。新增業者改 `lib/carriers.ts` 即可。 */
+const CHANNELS: { key: string; label: string; sub: string; carrier: string; image: string; icon: LucideIcon }[] = [
+  { key: "SELF", label: "北部", sub: "自家配送", carrier: "SELF", image: "/tiles/logi.png", icon: ClipboardList },
+  ...DISPATCH_CARRIERS.map((c) => ({
+    key: c.carrier,
+    label: c.short,
+    sub: c.carrier,
+    carrier: c.carrier,
+    image: "/tiles/carrier.png",
+    icon: Truck as LucideIcon,
+  })),
+];
 
-type View = null | "manage" | "north" | "hsinchu" | "dalen" | "total";
+type View = null | "manage" | "total" | string;
 
 /** 已指派＝這批貨真的要出去的單子。
  *  自家配送：已指派給送貨人員（SELECTED）或已檢貨（DISPATCHED）。
