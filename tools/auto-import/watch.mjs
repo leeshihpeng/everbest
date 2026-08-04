@@ -20,7 +20,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // 版本字串會寫進日誌。搬到別台電腦時若忘了更新程式，
 // 看日誌第一行就能確認那台跑的是哪一版（例如貨物追蹤是 2026-07-30 之後才加的）。
-const VERSION = "2026-07-31（派遣單 + 貨物追蹤）";
+const VERSION = "2026-08-04（跳過原因寫進日誌 + 當天派遣單例行重送）";
 
 function loadEnv() {
   const envPath = path.join(HERE, ".env");
@@ -40,6 +40,9 @@ const env = loadEnv();
 const API_BASE = (env.API_BASE || "https://everbest.onrender.com").replace(/\/+$/, "");
 const IMPORT_KEY = env.IMPORT_API_KEY || "";
 const POLL_SECONDS = Number(env.POLL_SECONDS || 60);
+// 當天的派遣單即使內容沒變，每隔這麼久也重送一次，讓被刪掉的資料能自己補回來。
+// 設 0 可關掉（就回到只看內容有沒有變的舊行為）。
+const RECHECK_MINUTES = Number(env.RECHECK_MINUTES ?? 15);
 const STATE_PATH = path.join(HERE, "state.json");
 const LOG_PATH = path.join(HERE, "auto-import.log");
 const LOCK_PATH = path.join(HERE, "watch.lock");
@@ -136,9 +139,12 @@ async function post(endpoint, form) {
   return body;
 }
 
-async function importFile(filePath, rule) {
+async function importFile(filePath, rule, opts = {}) {
   const buffer = readFileSync(filePath);
   const name = path.basename(filePath);
+  // recheck＝內容沒變但時間到了的例行重送，日誌上標出來，
+  // 免得看到一堆匯入紀錄以為 ERP 一直在改檔案
+  const tag = opts.recheck ? "（例行重送）" : "";
 
   if (rule.kind === "shipments") {
     // 貨物追蹤：後端會自動辨識是新竹還是大榮的報表，並覆蓋同一天的舊資料
@@ -161,9 +167,10 @@ async function importFile(filePath, rule) {
   const parts = [`新增 ${body.createdCount ?? 0}`];
   if (body.updatedCount) parts.push(`更新 ${body.updatedCount}`);
   if (body.skippedCount) parts.push(`略過 ${body.skippedCount}（已在作業中）`);
+  if (body.unassignedCount) parts.push(`⚠ 未指派 ${body.unassignedCount}`);
   if (body.purged) parts.push(`清除舊單 ${body.purged}`);
   if (body.noteCount) parts.push(`附註 ${body.noteCount}`);
-  log(`${rule.label} ← ${name}：${parts.join("・")}`);
+  log(`${rule.label}${tag} ← ${name}：${parts.join("・")}`);
   if (body.errors?.length) log(`  ⚠ ${body.errors.join("；")}`);
   return body;
 }
@@ -197,14 +204,29 @@ function listFiles(dir, match, recursive) {
 // 記住上一輪看到的大小／時間戳，用來判斷檔案是不是還在寫入
 const lastSeen = new Map();
 
+// 同一個原因不要每分鐘洗一次日誌，但也不能完全不講——
+// 「為什麼沒有自動匯入」查不出來就是因為跳過時什麼都沒寫。
+const skipLogged = new Map();
+function logSkipOnce(filePath, reason) {
+  if (skipLogged.get(filePath) === reason) return;
+  skipLogged.set(filePath, reason);
+  log(`  跳過 ${path.basename(filePath)}：${reason}`);
+}
+
 async function scanOnce() {
   heartbeat();
   const state = loadState();
 
   for (const rule of WATCH) {
-    if (!existsSync(rule.dir)) continue;
+    if (!existsSync(rule.dir)) {
+      logSkipOnce(rule.dir, `資料夾不存在（${rule.label}）`);
+      continue;
+    }
 
-    for (const filePath of listFiles(rule.dir, rule.match, rule.recursive)) {
+    const files = listFiles(rule.dir, rule.match, rule.recursive);
+    if (files.length === 0) logSkipOnce(rule.dir, `資料夾裡沒有符合的檔案（${rule.label}）`);
+
+    for (const filePath of files) {
       const name = path.basename(filePath);
 
       let st;
@@ -213,10 +235,18 @@ async function scanOnce() {
       } catch {
         continue;
       }
-      if (!st.isFile() || st.size === 0) continue;
+      if (!st.isFile()) continue;
+      if (st.size === 0) {
+        logSkipOnce(filePath, "檔案是空的");
+        continue;
+      }
       // 派遣單每天覆蓋同一個檔名，只處理當日更新的，避免把舊檔又匯一次；
       // 託運報表則不限日期，只看內容有沒有變。
-      if (rule.todayOnly && !isToday(st.mtime)) continue;
+      if (rule.todayOnly && !isToday(st.mtime)) {
+        // 常見原因：檔案是用複製／同步過來的，複製工具保留了原本的修改時間。
+        logSkipOnce(filePath, `修改時間不是今天（${st.mtime.toLocaleString("zh-TW")}），派遣單只收當天的檔案`);
+        continue;
+      }
 
       // 檔案可能正在被寫入：大小或時間戳跟上一輪不同就先跳過，下一輪再看
       const fingerprint = `${st.size}|${st.mtimeMs}`;
@@ -226,12 +256,27 @@ async function scanOnce() {
       }
 
       const hash = createHash("sha256").update(readFileSync(filePath)).digest("hex");
-      if (state[filePath]?.hash === hash) continue; // 內容和上次匯入的一樣
+      const prev = state[filePath];
+      const sameContent = prev?.hash === hash;
+
+      // 內容沒變通常就不用再送。但如果資料被刪掉（不管是誤刪還是清理），
+      // 光靠雜湊比對永遠不會補回來，看起來就像「自動匯入壞掉了」。
+      // 所以當天的派遣單每隔 RECHECK_MINUTES 分鐘強制重送一次——
+      // 匯入本身是冪等的（已檢貨的略過、標記刪除的不會復活），重送是安全的。
+      const lastImportMs = prev?.importedAt ? Date.parse(prev.importedAt) : 0;
+      const dueForRecheck =
+        rule.todayOnly && RECHECK_MINUTES > 0 && Date.now() - lastImportMs > RECHECK_MINUTES * 60 * 1000;
+
+      if (sameContent && !dueForRecheck) {
+        logSkipOnce(filePath, `內容與上次匯入相同（${RECHECK_MINUTES} 分鐘後會再確認一次）`);
+        continue;
+      }
 
       try {
-        await importFile(filePath, rule);
+        await importFile(filePath, rule, { recheck: sameContent });
         state[filePath] = { hash, importedAt: new Date().toISOString() };
         saveState(state);
+        skipLogged.delete(filePath);
       } catch (err) {
         log(`${rule.label} ← ${name}：匯入失敗（${err.message}），下一輪會重試`);
       }
@@ -241,6 +286,11 @@ async function scanOnce() {
 
 acquireLock();
 log(`開始監看 v${VERSION}（每 ${POLL_SECONDS} 秒掃一次）→ ${API_BASE}`);
+log(
+  RECHECK_MINUTES > 0
+    ? `  當天的派遣單即使內容沒變，每 ${RECHECK_MINUTES} 分鐘也會重送一次（被刪掉的資料會自己補回來）`
+    : "  已關閉例行重送（RECHECK_MINUTES=0），只有檔案內容變了才會匯入"
+);
 for (const w of WATCH) {
   if (!existsSync(w.dir)) {
     mkdirSync(w.dir, { recursive: true });

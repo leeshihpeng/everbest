@@ -115,12 +115,18 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
     }
   }
 
+  // 「已刪除」分頁上按刪除＝真的從資料庫清掉；其他分頁＝標記為已刪除。
+  //
+  // 一般刪除刻意不做真刪除：自動匯入會定期重送當天的檔案（讓誤刪的資料自己補回來），
+  // 真刪掉的單子十幾分鐘後就會原樣復活，看起來像刪除功能壞了。
+  const isPurgeView = status === "CANCELLED";
+
   async function handleDelete(id: string) {
-    if (!confirm("確定要刪除這筆派遣單嗎？")) return;
+    if (!confirm(isPurgeView ? "確定要永久刪除這筆派遣單嗎？" : "確定要刪除這筆派遣單嗎？")) return;
     setDeletingId(id);
     setError(null);
     try {
-      await api.deleteOrder(id);
+      await (isPurgeView ? api.deleteOrder(id) : api.cancelOrder(id));
       await load();
     } catch (err) {
       setError((err as Error).message);
@@ -153,11 +159,11 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
   }
   async function handleBulkDelete() {
     if (selected.size === 0) return;
-    if (!confirm(`確定要刪除已勾選的 ${selected.size} 筆派遣單嗎？`)) return;
+    if (!confirm(`確定要${isPurgeView ? "永久" : ""}刪除已勾選的 ${selected.size} 筆派遣單嗎？`)) return;
     setBulkDeleting(true);
     setError(null);
     try {
-      await Promise.all(Array.from(selected).map((id) => api.deleteOrder(id)));
+      await Promise.all(Array.from(selected).map((id) => (isPurgeView ? api.deleteOrder(id) : api.cancelOrder(id))));
       await load();
     } catch (err) {
       setError((err as Error).message);
@@ -229,9 +235,10 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
           </button>
         ))}
       </div>
-      {status === "CANCELLED" && (
+      {isPurgeView && (
         <div className="text-[11px] mb-2" style={{ color: C.muted }}>
-          這些是送貨人員或倉管拿掉的派遣單。自動匯入不會把它們加回來；確定不需要了可以在這裡真的刪除。
+          這些是被拿掉的派遣單，自動匯入不會把它們加回來。
+          在這一頁按刪除是<b>永久刪除</b>；若那份 ERP 檔案還在，下次自動匯入會把它們當成新單子重新建立。
         </div>
       )}
 

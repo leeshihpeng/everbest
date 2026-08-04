@@ -186,10 +186,7 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
             ? { status: "SELECTED", assignedDriverId: driver.id }
             : { status: "PENDING", assignedDriverId: null }
           : {};
-      if (carrier === "SELF") {
-        if (driver) touchedDriverIds.add(driver.id);
-        else unassignedCount++;
-      }
+      if (carrier === "SELF" && !driver) unassignedCount++;
 
       if (existing) {
         await prisma.dispatchOrder.update({
@@ -202,17 +199,20 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
             items: { deleteMany: {}, create: g.items },
           },
         });
-        if (existing.assignedDriverId) touchedDriverIds.add(existing.assignedDriverId);
         updated++;
       } else {
         const order = await prisma.dispatchOrder.create({
           data: { ...data, ...assignment, items: { create: g.items } },
         });
         created.push(order.id);
+        // **只有真的有新單子進來才重排順序。**
+        // watcher 會定期重送同一份檔案（讓被刪掉的資料自己補回來），
+        // 若連「純更新」也重排，送貨人員自己拖過的順序每隔十幾分鐘就會被打回縣市順序。
+        if (driver) touchedDriverIds.add(driver.id);
       }
     }
 
-    // 依縣市重排每位被動到的送貨人員的路線順序（台北→新北→基隆→桃園→其他）
+    // 依縣市重排有新單子進來的送貨人員路線（台北→新北→基隆→桃園→其他）
     for (const driverId of touchedDriverIds) {
       await resequenceByCity(driverId);
     }
