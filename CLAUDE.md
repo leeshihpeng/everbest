@@ -22,10 +22,18 @@
 
 ## 部署
 
-`git push origin main` → Render（後端）與 Vercel（前端）各自**自動部署**，約 1–2 分鐘。
-
-- 前端：https://everbest-web-jade.vercel.app
-- 後端：https://everbest.onrender.com
+- 前端：https://everbest-web-jade.vercel.app（Vercel）
+- 後端：https://sansoon-api-702692123354.asia-east1.run.app（**Cloud Run，2026-08-04 起正式**）
+- 舊後端 https://everbest.onrender.com（Render）**還活著但已無人使用**，留著當退路。
+  Render 仍會隨 `git push` 自動部署；確認 Cloud Run 穩定後再關閉。
+- **Vercel 的 GitHub 自動部署目前是壞的**，前端要用 `npx vercel --prod` 手動發佈。
+- Cloud Run 部署方式、環境變數、IAM 權限見 `docs/cloud-run.md`。
+  **後端改完不會自己上線**，要跑 `gcloud run deploy sansoon-api --source . --region asia-east1`。
+- Cloud Run 不跑 `prisma migrate deploy`（多實例會互相衝突），
+  **migration 要從本機手動套用**：`cd apps/api && npx prisma migrate deploy`。
+  這跟 Render 時代不同——以前 push 上去就自動跑了，現在漏掉會出現「欄位不存在」的錯。
+- Cloud Run 會**同時起多個實例**：任何存在記憶體的狀態都不可靠。
+  目前登入失敗鎖定（`routes/auth.ts` 的 `fails` Map）就是記憶體計數，多實例下門檻會變寬鬆。
 - Render 啟動時會跑 `prisma migrate deploy`，所以 **migration 檔一定要 commit**。
 - Render Start Command 指向巢狀路徑 `apps/api/dist/apps/api/src/index.js`（因 tsc rootDir 受 path-mapped shared-types 影響）。改建置設定時注意。
   `apps/api` 的 `start` script 也指同一個路徑。**若哪天 api 不再 import shared-types，輸出會變回 `dist/src/`，兩邊都要改。**
@@ -40,6 +48,13 @@
 - **中文參數不能直接寫在指令列**（curl `-d`、`node -e`）會變亂碼或 exit 26。
   改用 `--data-binary @file.json`、`-F 'files=@/tmp/ascii.pdf;filename=中文.pdf'`，或寫成 `.mjs` 檔執行。
   → 出現亂碼多半是 shell 編碼問題，**不是程式的 bug**，別急著「修」。
+- **PowerShell 管線會在字串開頭塞 UTF-8 BOM**。`"值" | some.cmd` 餵給外部程式時，
+  對方收到的是 `﻿值`。2026-08-04 就是這樣把 Vercel 的 `VITE_API_BASE_URL`
+  設成 `﻿https://...`，前端因為「開頭不是 http」而當成相對路徑，
+  **整站每個 API 呼叫都變成 404**，而且 bundle 裡搜得到網址字串、看起來完全正常。
+  → 要餵值給外部程式，改用 `cmd /c "prog args < file.txt"`，
+  檔案用 Node 寫（`writeFileSync(p, s, {encoding:'latin1'})`）確保無 BOM。
+  → **驗證不能只看「字串有沒有出現」**，要看前後文（`sa="https://` 才對）或直接在瀏覽器發一次請求。
 - 跑 `prisma migrate` / `generate` 前**先停掉 dev server**，否則 Windows 會 EPERM 鎖住 query engine DLL。
 - `prisma migrate dev` 在此環境是非互動的，需要回填資料的欄位請**手寫 migration SQL**（先加 DEFAULT 回填再 DROP DEFAULT）。
 - 本機有 `pdftotext`，但 **Render 上沒有**。伺服器端解析 PDF 一律用 `pdf-parse`：

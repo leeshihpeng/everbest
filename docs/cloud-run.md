@@ -6,7 +6,7 @@ Cloud Run 冷啟動約 1–2 秒，而且用量在免費額度內。
 
 ## 目前狀態（2026-08-04）
 
-已部署完成，但**還沒切換**：前端仍指向 Render，Render 也還在跑。兩邊並存不互相影響。
+**已切換完成，正式流量走 Cloud Run。** Render 尚未關閉，留作退路。
 
 | 項目 | 值 |
 |---|---|
@@ -144,19 +144,27 @@ curl -o NUL -s -w "%{time_total}s\n" https://sansoon-api-702692123354.asia-east1
 
 ## 六、切換前端（尚未執行）
 
-Cloud Run 的環境變數已經跟 Render 對齊（五個都設好了），切換剩兩件事：
+前端已於 2026-08-04 切換完成（`VITE_API_BASE_URL` 指向 Cloud Run，`npx vercel --prod` 發佈）。
 
-1. Vercel 專案 → Settings → Environment Variables → 把 `VITE_API_BASE_URL`
-   改成 `https://sansoon-api-702692123354.asia-east1.run.app`，然後重新部署前端：
+**還沒做的**：另一台工作電腦上自動匯入程式 `tools/auto-import/.env` 的 `API_BASE`
+也要改成新網址並重啟 watcher。**這一步漏掉，派遣單與貨物追蹤就不會再自動匯入**——
+不過因為 Render 還活著、而且連的是同一個 Neon 資料庫，
+watcher 打舊網址其實還是會成功寫入，**完全看不出異狀**，等哪天關掉 Render 才會爆。
+所以關 Render 前一定要先確認這一項做完了。
+
+### ⚠️ 設 Vercel 環境變數不要用 PowerShell 管線
+
+`"https://..." | vercel.cmd env add ...` 會在開頭混入 UTF-8 BOM，值變成 `﻿https://...`。
+前端判斷「開頭不是 http」就當成相對路徑，結果**每個 API 呼叫都打到 Vercel 自己並回 404**。
+最陰險的是 bundle 裡搜「有沒有 Cloud Run 網址」會回報正常。正確作法：
 
 ```bash
-npx vercel --prod
+cmd /c "vercel.cmd env add VITE_API_BASE_URL production < apiurl.txt"
 ```
 
-2. 另一台工作電腦上自動匯入程式 `tools/auto-import/.env` 的 `API_BASE`
-   也改成新網址，重啟 watcher。**這一步漏掉，派遣單與貨物追蹤就不會再自動匯入**，
-   而且 watcher 那邊只會安靜地打到舊網址（Render 還活著的話甚至會成功寫進同一個資料庫，
-   更難察覺）。
+`apiurl.txt` 用 Node 寫（`writeFileSync(p, url, {encoding:'latin1'})`）確保沒有 BOM。
+驗證要看網址的**前後文**（bundle 裡應為 `sa="https://sanso`），或直接在瀏覽器
+對 API 發一次 `fetch` 確認 CORS 與回應。
 
 `CORS_ORIGINS` 已經設成 `https://everbest-web-jade.vercel.app`，不用再動。
 
