@@ -154,6 +154,21 @@ export default function DriverRoute() {
     [orders, completed]
   );
 
+  // 目前用的是哪一種排序，讓兩顆按鈕能正確反白。
+  // 不另外存狀態，直接從現況推導，這樣重新整理、換手機登入也不會顯示錯：
+  //   沒有手動順序 → 系統的最短路徑
+  //   有手動順序且剛好照縣市遞增 → 依縣市（匯入時的預設順序）
+  //   有手動順序但不是縣市順序 → 送貨人員自己拖過，兩顆都不反白
+  const sortMode: "city" | "shortest" | "custom" = useMemo(() => {
+    if (!manualOrder) return "shortest";
+    const ids = route ? route.stops.map((s) => s.refId) : [];
+    if (ids.length === 0) return "city";
+    const byId = new Map(orders.map((o) => [o.id, o]));
+    const cityIdx = ids.map((id) => dispatchCityIndex(dispatchCityOf(byId.get(id)?.address ?? "")));
+    const ascending = cityIdx.every((v, i) => i === 0 || cityIdx[i - 1] <= v);
+    return ascending ? "city" : "custom";
+  }, [manualOrder, route, orders]);
+
   // 今日派遣單清單依縣市分區，順序即送貨順序（台北→新北→基隆→桃園→其他）
   const cityGroups = useMemo(() => {
     const map = new Map<string, Order[]>();
@@ -447,28 +462,40 @@ export default function DriverRoute() {
             </div>
             <div className="mb-2">
               <div style={{ color: C.muted }} className="text-[11px] mb-1.5">
-                按住右上角把手 ⠿ 可拖曳調整順序
+                {sortMode === "city"
+                  ? "目前：依縣市順序"
+                  : sortMode === "shortest"
+                  ? "目前：系統最短路徑"
+                  : "目前：你自己調整的順序"}
+                ・按住右上角把手 ⠿ 可拖曳
                 {savingOrder && "・儲存中…"}
               </div>
-              {/* 兩種排序各給一顆按鈕：拖亂了想回到匯入時的縣市順序，
-                  或想改用系統依距離排的建議路線，都不必請主管重新指派 */}
+              {/* 兩種排序各給一顆按鈕，目前生效的那顆填滿反白——
+                  只有外框深淺的話，按了之後看不出來換了沒有。 */}
               <div className="flex gap-2">
-                <button
-                  onClick={sortByCity}
-                  disabled={savingOrder}
-                  style={{ border: `1px solid ${C.logiAccent}`, color: C.logiAccent }}
-                  className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg disabled:opacity-60 shrink-0"
-                >
-                  <MapIcon size={12} /> 依縣市排序
-                </button>
-                <button
-                  onClick={useShortestPath}
-                  disabled={savingOrder}
-                  style={{ border: `1px solid ${C.hairline}`, color: C.muted }}
-                  className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg disabled:opacity-60 shrink-0"
-                >
-                  <RotateCcw size={12} /> 改用最短路徑
-                </button>
+                {(
+                  [
+                    ["city", "依縣市排序", MapIcon, sortByCity],
+                    ["shortest", "改用最短路徑", RotateCcw, useShortestPath],
+                  ] as const
+                ).map(([mode, label, Icon, onClick]) => {
+                  const active = sortMode === mode;
+                  return (
+                    <button
+                      key={mode}
+                      onClick={onClick}
+                      disabled={savingOrder}
+                      style={
+                        active
+                          ? { background: C.logiAccent, border: `1px solid ${C.logiAccent}`, color: "#fff" }
+                          : { background: "#fff", border: `1px solid ${C.hairline}`, color: C.muted }
+                      }
+                      className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg disabled:opacity-60 shrink-0"
+                    >
+                      <Icon size={12} /> {label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <RouteTimeline
