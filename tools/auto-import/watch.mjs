@@ -20,7 +20,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // 版本字串會寫進日誌。搬到別台電腦時若忘了更新程式，
 // 看日誌第一行就能確認那台跑的是哪一版（例如貨物追蹤是 2026-07-30 之後才加的）。
-const VERSION = "2026-08-04（跳過原因寫進日誌 + 當天派遣單例行重送）";
+const VERSION = "2026-08-05（派遣單只收檔名帶日期的檔案 + 含子資料夾）";
 
 function loadEnv() {
   const envPath = path.join(HERE, ".env");
@@ -58,13 +58,31 @@ const DIR_SELF = env.DIR_SELF || String.raw`C:\server\出貨派遣`;
 const DIR_HSINCHU = env.DIR_HSINCHU || String.raw`C:\server\新竹貨運`;
 const DIR_DALEN = env.DIR_DALEN || String.raw`C:\server\大榮貨運`;
 
+/** 檔名裡的日期編號（YYYYMMDD），例如 `出貨派遣單20260730.CSV`、`202607\20260729-2.CSV`。
+ *
+ *  **沒有日期的一律不匯入**：`新竹轉檔.CSV`／`大榮轉檔.CSV`／`出貨派遣單.CSV` 是 ERP 的工作檔，
+ *  內容可能是半成品或上一批的殘留，匯進去會產生錯誤的派遣單（使用者 2026-08-05 指定要略過）。
+ *  正式檔一律帶日期，所以「檔名有沒有日期」就是最可靠的判斷依據——
+ *  比列黑名單好，因為之後多出別的工作檔也不會誤收。 */
+const DATED_NAME = /(^|\D)20\d{6}(\D|$)/;
+
+/** 取檔名裡的日期，用來把同一天的檔案分成一組。取不到就自成一組。 */
+function dateKeyOf(filePath) {
+  const m = path.basename(filePath).match(/(^|\D)(20\d{6})(\D|$)/);
+  return m ? m[2] : filePath;
+}
+
 // 監看規則。同一個資料夾可以有兩種用途：
-//   kind=orders    派遣單 CSV（每天覆蓋同一個檔名）→ 內勤後台的派遣單分頁
+//   kind=orders    派遣單 CSV（檔名帶日期，可能放在年月子資料夾）→ 內勤後台的派遣單分頁
 //   kind=shipments 託運報表 PDF（放在 202607 之類的年月子資料夾）→ 貨物追蹤
+//
+// 派遣單三個資料夾都設 recursive：新竹／大榮的正式檔放在年月子資料夾裡，
+// 出貨派遣目前檔案在最上層、但之後也會改成子資料夾（使用者 2026-08-05 說明），
+// 兩種擺法都要收得到。
 const WATCH = [
-  { dir: DIR_SELF, kind: "orders", carrier: "SELF", label: "派遣單", match: /\.(csv|txt)$/i, todayOnly: true },
-  { dir: DIR_HSINCHU, kind: "orders", carrier: "新竹貨運", label: "新竹派遣單", match: /\.(csv|txt)$/i, todayOnly: true },
-  { dir: DIR_DALEN, kind: "orders", carrier: "大榮貨運", label: "大榮派遣單", match: /\.(csv|txt)$/i, todayOnly: true },
+  { dir: DIR_SELF, kind: "orders", carrier: "SELF", label: "派遣單", match: /\.(csv|txt)$/i, todayOnly: true, datedOnly: true, recursive: true },
+  { dir: DIR_HSINCHU, kind: "orders", carrier: "新竹貨運", label: "新竹派遣單", match: /\.(csv|txt)$/i, todayOnly: true, datedOnly: true, recursive: true },
+  { dir: DIR_DALEN, kind: "orders", carrier: "大榮貨運", label: "大榮派遣單", match: /\.(csv|txt)$/i, todayOnly: true, datedOnly: true, recursive: true },
   // 託運報表不限當天：報表可能是前幾天出的，只要內容有更新就重新匯入並覆蓋上次版本。
   // 檔案放在年月子資料夾，所以要往下找。
   { dir: DIR_HSINCHU, kind: "shipments", label: "新竹貨物追蹤", match: /^pdfsummary.*\.pdf$/i, recursive: true },
@@ -179,8 +197,9 @@ async function importFile(filePath, rule, opts = {}) {
 
 /** 列出資料夾內符合條件的檔案。
  *  recursive＝往下找「所有」子資料夾（不限年月那一層，例如 202607\新竹\ 也找得到）。
+ *  datedOnly＝檔名必須帶日期編號（見 DATED_NAME），用來排除 ERP 的工作檔。
  *  仍設一個很寬鬆的深度上限，純粹是防止捷徑造成的無限循環。 */
-function listFiles(dir, match, recursive) {
+function listFiles(rule) {
   const MAX_DEPTH = 12;
   const found = [];
   const walk = (d, depth) => {
@@ -193,13 +212,13 @@ function listFiles(dir, match, recursive) {
     for (const e of entries) {
       const full = path.join(d, e.name);
       if (e.isDirectory()) {
-        if (recursive && depth < MAX_DEPTH) walk(full, depth + 1);
-      } else if (match.test(e.name)) {
+        if (rule.recursive && depth < MAX_DEPTH) walk(full, depth + 1);
+      } else if (rule.match.test(e.name) && (!rule.datedOnly || DATED_NAME.test(e.name))) {
         found.push(full);
       }
     }
   };
-  walk(dir, 0);
+  walk(rule.dir, 0);
   return found;
 }
 
@@ -225,12 +244,12 @@ async function scanOnce() {
       continue;
     }
 
-    const files = listFiles(rule.dir, rule.match, rule.recursive);
+    const files = listFiles(rule);
     if (files.length === 0) logSkipOnce(rule.dir, `資料夾裡沒有符合的檔案（${rule.label}）`);
 
+    // 先挑出這一輪真正要考慮的檔案，順便帶上修改時間供排序
+    const candidates = [];
     for (const filePath of files) {
-      const name = path.basename(filePath);
-
       let st;
       try {
         st = statSync(filePath);
@@ -242,8 +261,7 @@ async function scanOnce() {
         logSkipOnce(filePath, "檔案是空的");
         continue;
       }
-      // 派遣單每天覆蓋同一個檔名，只處理當日更新的，避免把舊檔又匯一次；
-      // 託運報表則不限日期，只看內容有沒有變。
+      // 派遣單只處理當日的檔案，避免把歷年舊檔又匯一次；託運報表則不限日期，只看內容有沒有變。
       if (rule.todayOnly && !isToday(st.mtime)) {
         // 常見原因：檔案是用複製／同步過來的，複製工具保留了原本的修改時間。
         logSkipOnce(filePath, `修改時間不是今天（${st.mtime.toLocaleString("zh-TW")}），派遣單只收當天的檔案`);
@@ -256,6 +274,22 @@ async function scanOnce() {
         lastSeen.set(filePath, fingerprint);
         continue;
       }
+      candidates.push({ filePath, mtimeMs: st.mtimeMs });
+    }
+
+    // 同一天常常有多個檔（`出貨派遣單20260805.CSV` 與 `出貨派遣單20260805-1.CSV`），
+    // 而且兩種情況都存在：有時是**修訂版**（同一批客戶、內容改了，例如客戶臨時加訂），
+    // 有時是**追加單**（完全不同的客戶）。因此不能只取其中一個，但順序很重要——
+    // **一律依修改時間由舊到新送**，最新的版本最後寫入才會是最終狀態。
+    // （按檔名排序會讓 `-1` 排在無編號的檔案前面，反而讓舊內容蓋掉新的。）
+    candidates.sort((a, b) => a.mtimeMs - b.mtimeMs);
+
+    // 每個日期最新的那個檔：例行重送只送它，見下方說明
+    const newestOfDay = new Map();
+    for (const c of candidates) newestOfDay.set(dateKeyOf(c.filePath), c.filePath);
+
+    for (const { filePath } of candidates) {
+      const name = path.basename(filePath);
 
       const hash = createHash("sha256").update(readFileSync(filePath)).digest("hex");
       const prev = state[filePath];
@@ -265,12 +299,24 @@ async function scanOnce() {
       // 光靠雜湊比對永遠不會補回來，看起來就像「自動匯入壞掉了」。
       // 所以當天的派遣單每隔 RECHECK_MINUTES 分鐘強制重送一次——
       // 匯入本身是冪等的（已檢貨的略過、標記刪除的不會復活），重送是安全的。
+      // 例行重送只送「同一天最新的那個檔」。把舊修訂版每 15 分鐘重送一遍的話，
+      // 客戶臨時加訂的品項會被改回舊數量、送貨人員檢好的貨也會被清掉——
+      // 內容真的變了的檔案不受這個限制，一律立刻送。
       const lastImportMs = prev?.importedAt ? Date.parse(prev.importedAt) : 0;
+      const isNewestOfDay = newestOfDay.get(dateKeyOf(filePath)) === filePath;
       const dueForRecheck =
-        rule.todayOnly && RECHECK_MINUTES > 0 && Date.now() - lastImportMs > RECHECK_MINUTES * 60 * 1000;
+        rule.todayOnly &&
+        RECHECK_MINUTES > 0 &&
+        isNewestOfDay &&
+        Date.now() - lastImportMs > RECHECK_MINUTES * 60 * 1000;
 
       if (sameContent && !dueForRecheck) {
-        logSkipOnce(filePath, `內容與上次匯入相同（${RECHECK_MINUTES} 分鐘後會再確認一次）`);
+        logSkipOnce(
+          filePath,
+          isNewestOfDay
+            ? `內容與上次匯入相同（${RECHECK_MINUTES} 分鐘後會再確認一次）`
+            : "內容與上次匯入相同，且同一天有更新的檔案（不重送舊版本）"
+        );
         continue;
       }
 
@@ -303,9 +349,22 @@ for (const w of WATCH) {
     log(`已建立資料夾 ${w.dir}`);
   }
   // 一併印出目前掃到幾個符合的檔案：若貨物追蹤顯示 0 個，
-  // 就知道是檔名或路徑不對，而不是程式沒跑
-  const n = listFiles(w.dir, w.match, w.recursive).length;
-  log(`  監看 ${w.dir}${w.recursive ? "（含子資料夾）" : ""} → ${w.label}：目前符合的檔案 ${n} 個`);
+  // 就知道是檔名或路徑不對，而不是程式沒跑。
+  // 派遣單含子資料夾後總數會是歷年累積的幾千個，所以另外標出「今天的」——
+  // 真正會匯入的只有今天那幾個，看總數容易誤判。
+  const matched = listFiles(w);
+  let detail = `目前符合的檔案 ${matched.length} 個`;
+  if (w.todayOnly) {
+    const todayCount = matched.filter((f) => {
+      try {
+        return isToday(statSync(f).mtime);
+      } catch {
+        return false;
+      }
+    }).length;
+    detail += `，其中今天的 ${todayCount} 個`;
+  }
+  log(`  監看 ${w.dir}${w.recursive ? "（含子資料夾）" : ""} → ${w.label}：${detail}`);
 }
 
 // 上一輪還沒跑完就不要再開一輪：上傳 PDF 或 Render 冷啟動可能花上幾十秒，
