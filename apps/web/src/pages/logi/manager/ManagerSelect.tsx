@@ -108,11 +108,12 @@ export default function ManagerSelect() {
   if (loading) return <div className="p-6 text-center text-[13px]" style={{ color: C.muted }}>載入中…</div>;
 
   // 派遣單管理：沿用內勤後台的清單。匯入 CSV 是內勤的職責，這裡不提供。
+  // 貨品數量統計也關掉：這一頁的各管道磁磚（北部等）已經有同一份數字，重複只會讓人不確定看哪個。
   if (view === "manage") {
     return (
       <div>
         <TopBar title="派遣單管理（物流管理）" accent={C.header} onBack={() => setView(null)} />
-        <OrdersPanel allowImport={false} />
+        <OrdersPanel allowImport={false} showSummary={false} />
       </div>
     );
   }
@@ -209,11 +210,12 @@ export default function ManagerSelect() {
         )}
 
         <TileGrid>
+          {/* 這塊是「進去管理清單」的入口，不是統計。筆數由下面各管道磁磚負責，
+              這裡再標一次反而讓人以為是另一個數字（使用者 2026-08-05 要求拿掉）。 */}
           <Tile
             icon={ClipboardList}
             image="/tiles/logi.png"
             label="派遣單管理"
-            sub={`${allActive.length} 筆`}
             color={C.logiAccent}
             soft={C.logiAccentSoft}
             onClick={() => setView("manage")}

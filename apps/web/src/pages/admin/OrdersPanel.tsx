@@ -41,7 +41,13 @@ interface Order {
 // 因此非 ADMIN（例如只有 MANAGER 的徐文卿）只看得到清單與狀態篩選。
 // carrier 省略＝自家配送；帶「新竹貨運」／「大榮貨運」則為交給貨運行的派遣單
 // allowImport=false：物流主管頁面用。匯入派遣單是內勤的事，即使本人兼 ADMIN 也不該從這裡匯入
-export default function OrdersPanel({ carrier, allowImport = true }: { carrier?: string; allowImport?: boolean } = {}) {
+// showSummary=false：物流管理的「派遣單管理」用。那一頁的各管道磁磚（北部等）已經有同一份
+//   貨品數量統計，這裡再放一次只是重複，反而讓人不確定該看哪個數字
+export default function OrdersPanel({
+  carrier,
+  allowImport = true,
+  showSummary = true,
+}: { carrier?: string; allowImport?: boolean; showSummary?: boolean } = {}) {
   const isAdmin = !!getAuthedStaff()?.roles.includes("ADMIN");
   const isSelf = !carrier || carrier === "SELF";
   const [orders, setOrders] = useState<Order[]>([]);
@@ -266,7 +272,7 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
       {error && <div className="text-[12px] mb-2" style={{ color: C.danger }}>{error}</div>}
 
       {/* 統計範圍跟著上方狀態篩選走，所以「待處理」與「已勾選配送」的總計本來就會不同 */}
-      {!loading && orders.length > 0 && (
+      {showSummary && !loading && orders.length > 0 && (
         <ProductSummary
           title={`貨品數量統計（${status ? STATUS_LABELS[status] : "全部"}）`}
           items={orders.flatMap((o) => o.items)}
