@@ -198,6 +198,13 @@ export const api = {
       orderIds: string[];
       updatedCount: number;
       skippedCount: number;
+      // 訂貨內容與上次完全相同、不需要處理的筆數
+      unchangedCount: number;
+      // 內容變了但單子已完成／已刪除，未自動更新（需人工確認）
+      conflictCount: number;
+      conflicts: string[];
+      // 送貨人員檢貨到一半內容被改掉的筆數，變動品項已取消勾選並發出通知
+      changedInProgressCount: number;
       purged: number;
       noteCount: number;
       // 自家配送找不到對應送貨人員、留在「待處理」的筆數

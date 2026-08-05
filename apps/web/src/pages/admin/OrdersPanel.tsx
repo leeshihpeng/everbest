@@ -52,6 +52,11 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
   const fileRef = useRef<HTMLInputElement>(null);
   const [importResult, setImportResult] = useState<{
     createdCount: number;
+    updatedCount: number;
+    unchangedCount: number;
+    conflictCount: number;
+    changedInProgressCount: number;
+    conflicts: string[];
     purged: number;
     noteCount: number;
     unassignedCount: number;
@@ -198,14 +203,30 @@ export default function OrdersPanel({ carrier, allowImport = true }: { carrier?:
         {importResult && (
           <div className="text-[12px] mt-2" style={{ color: C.muted }}>
             新增 {importResult.createdCount} 筆派遣單
+            {/* 訂貨內容有變才算「更新」，內容一樣的另外計數，才看得出這次到底改了什麼 */}
+            {importResult.updatedCount > 0 && `・更新 ${importResult.updatedCount} 筆（訂貨內容有異動）`}
+            {importResult.unchangedCount > 0 && `・${importResult.unchangedCount} 筆內容未變`}
             {importResult.purged > 0 && `・已清除非今日上傳的舊派遣單 ${importResult.purged} 筆`}
             ・帶入貨單附註 {importResult.noteCount} 筆
+            {/* 檢貨中被改掉最容易出貨錯數量，要獨立提醒內勤，不要混在一般計數裡 */}
+            {importResult.changedInProgressCount > 0 && (
+              <div style={{ color: C.gold }} className="mt-1">
+                有 {importResult.changedInProgressCount} 筆是送貨人員檢貨中被異動的，
+                變動的品項已取消檢貨勾選並已通知該送貨人員，請留意是否需要口頭確認。
+              </div>
+            )}
             {/* 自動指派有缺口時一定要講出來，否則單子會安靜地卡在「待處理」沒人送 */}
             {isSelf && importResult.unassignedCount > 0 && (
               <div style={{ color: C.danger }} className="mt-1">
                 有 {importResult.unassignedCount} 筆找不到對應的送貨人員，已留在「待處理」。
                 請到「人員」設定各送貨人員的配送縣市（不勾任何縣市＝後備，接收其他所有縣市），
                 再到物流管理首頁按「重新指派」。
+              </div>
+            )}
+            {/* 內容變了卻不能自動套用（單子已完成或已刪除）——這不是格式錯誤，要分開講 */}
+            {importResult.conflicts?.length > 0 && (
+              <div style={{ color: C.danger }} className="mt-1">
+                {importResult.conflicts.length} 筆訂貨內容有異動但未自動更新：{importResult.conflicts.join("；")}
               </div>
             )}
             <div className="mt-0.5">偵測到的 CSV 欄位：{importResult.detectedHeaders.join("、")}</div>
