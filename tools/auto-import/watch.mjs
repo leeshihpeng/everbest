@@ -5,9 +5,11 @@
 //
 // 行為：
 //   每 POLL_SECONDS 秒掃一次資料夾，找出派遣單 CSV 與託運報表 PDF。
-//   檔案內容的 SHA-256 與上次匯入的不同才會上傳（ERP 覆蓋同一個檔名也認得出來）。
+//   **派遣單只認檔名：沒送過的檔名就送，送過的永遠不再送**（使用者 2026-08-05 決定）。
+//     同名檔案就算內容被改掉也不會重送，這種情況由人工從內勤後台上傳處理。
+//   託運報表仍看內容雜湊，因為同一份報表會被更新覆蓋。
 //   檔案還在寫入時（大小或時間戳還在變）會等下一輪再處理，避免匯入到半截的檔案。
-//   後端以「配送方式＋送貨日期＋客戶代號」判斷同一張派遣單，重覆送不會產生重複資料。
+//   後端以「配送方式＋送貨日期＋客戶代號」認同一張派遣單，同一位客戶會**合併**而不是取代。
 //
 // 設定：把 .env.example 複製成 .env 填好；安裝成開機自動執行請看 README.md。
 
@@ -20,7 +22,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // 版本字串會寫進日誌。搬到別台電腦時若忘了更新程式，
 // 看日誌第一行就能確認那台跑的是哪一版（例如貨物追蹤是 2026-07-30 之後才加的）。
-const VERSION = "2026-08-05（派遣單只收檔名帶日期的檔案 + 含子資料夾）";
+const VERSION = "2026-08-05b（派遣單只認檔名匯入一次，不再例行重送）";
 
 function loadEnv() {
   const envPath = path.join(HERE, ".env");
@@ -42,9 +44,6 @@ const env = loadEnv();
 const API_BASE = (env.API_BASE || "https://sansoon-api-702692123354.asia-east1.run.app").replace(/\/+$/, "");
 const IMPORT_KEY = env.IMPORT_API_KEY || "";
 const POLL_SECONDS = Number(env.POLL_SECONDS || 60);
-// 當天的派遣單即使內容沒變，每隔這麼久也重送一次，讓被刪掉的資料能自己補回來。
-// 設 0 可關掉（就回到只看內容有沒有變的舊行為）。
-const RECHECK_MINUTES = Number(env.RECHECK_MINUTES ?? 15);
 const STATE_PATH = path.join(HERE, "state.json");
 const LOG_PATH = path.join(HERE, "auto-import.log");
 const LOCK_PATH = path.join(HERE, "watch.lock");
@@ -66,12 +65,6 @@ const DIR_YONGCHANG = env.DIR_YONGCHANG || String.raw`C:\server\永昌回頭車`
  *  正式檔一律帶日期，所以「檔名有沒有日期」就是最可靠的判斷依據——
  *  比列黑名單好，因為之後多出別的工作檔也不會誤收。 */
 const DATED_NAME = /(^|\D)20\d{6}(\D|$)/;
-
-/** 取檔名裡的日期，用來把同一天的檔案分成一組。取不到就自成一組。 */
-function dateKeyOf(filePath) {
-  const m = path.basename(filePath).match(/(^|\D)(20\d{6})(\D|$)/);
-  return m ? m[2] : filePath;
-}
 
 // 監看規則。同一個資料夾可以有兩種用途：
 //   kind=orders    派遣單 CSV（檔名帶日期，可能放在年月子資料夾）→ 內勤後台的派遣單分頁
@@ -173,12 +166,9 @@ async function post(endpoint, form) {
   return body;
 }
 
-async function importFile(filePath, rule, opts = {}) {
+async function importFile(filePath, rule) {
   const buffer = readFileSync(filePath);
   const name = path.basename(filePath);
-  // recheck＝內容沒變但時間到了的例行重送，日誌上標出來，
-  // 免得看到一堆匯入紀錄以為 ERP 一直在改檔案
-  const tag = opts.recheck ? "（例行重送）" : "";
 
   if (rule.kind === "shipments") {
     // 貨物追蹤：後端會自動辨識是新竹還是大榮的報表，並覆蓋同一天的舊資料
@@ -204,7 +194,7 @@ async function importFile(filePath, rule, opts = {}) {
   if (body.unassignedCount) parts.push(`⚠ 未指派 ${body.unassignedCount}`);
   if (body.purged) parts.push(`清除舊單 ${body.purged}`);
   if (body.noteCount) parts.push(`附註 ${body.noteCount}`);
-  log(`${rule.label}${tag} ← ${name}：${parts.join("・")}`);
+  log(`${rule.label} ← ${name}：${parts.join("・")}`);
   if (body.errors?.length) log(`  ⚠ ${body.errors.join("；")}`);
   return body;
 }
@@ -291,51 +281,25 @@ async function scanOnce() {
       candidates.push({ filePath, mtimeMs: st.mtimeMs });
     }
 
-    // 同一天常常有多個檔（`出貨派遣單20260805.CSV` 與 `出貨派遣單20260805-1.CSV`），
-    // 而且兩種情況都存在：有時是**修訂版**（同一批客戶、內容改了，例如客戶臨時加訂），
-    // 有時是**追加單**（完全不同的客戶）。因此不能只取其中一個，但順序很重要——
-    // **一律依修改時間由舊到新送**，最新的版本最後寫入才會是最終狀態。
-    // （按檔名排序會讓 `-1` 排在無編號的檔案前面，反而讓舊內容蓋掉新的。）
+    // 同一天常有多個檔（`…20260805.CSV` 與 `…20260805-1.CSV`），一律依修改時間由舊到新送，
+    // 後端合併時同品名以**後送的**為準，順序反了會讓舊內容蓋掉新的。
     candidates.sort((a, b) => a.mtimeMs - b.mtimeMs);
-
-    // 每個日期最新的那個檔：例行重送只送它，見下方說明
-    const newestOfDay = new Map();
-    for (const c of candidates) newestOfDay.set(dateKeyOf(c.filePath), c.filePath);
 
     for (const { filePath } of candidates) {
       const name = path.basename(filePath);
-
-      const hash = createHash("sha256").update(readFileSync(filePath)).digest("hex");
       const prev = state[filePath];
-      const sameContent = prev?.hash === hash;
 
-      // 內容沒變通常就不用再送。但如果資料被刪掉（不管是誤刪還是清理），
-      // 光靠雜湊比對永遠不會補回來，看起來就像「自動匯入壞掉了」。
-      // 所以當天的派遣單每隔 RECHECK_MINUTES 分鐘強制重送一次——
-      // 匯入本身是冪等的（已檢貨的略過、標記刪除的不會復活），重送是安全的。
-      // 例行重送只送「同一天最新的那個檔」。把舊修訂版每 15 分鐘重送一遍的話，
-      // 客戶臨時加訂的品項會被改回舊數量、送貨人員檢好的貨也會被清掉——
-      // 內容真的變了的檔案不受這個限制，一律立刻送。
-      const lastImportMs = prev?.importedAt ? Date.parse(prev.importedAt) : 0;
-      const isNewestOfDay = newestOfDay.get(dateKeyOf(filePath)) === filePath;
-      const dueForRecheck =
-        rule.todayOnly &&
-        RECHECK_MINUTES > 0 &&
-        isNewestOfDay &&
-        Date.now() - lastImportMs > RECHECK_MINUTES * 60 * 1000;
-
-      if (sameContent && !dueForRecheck) {
-        logSkipOnce(
-          filePath,
-          isNewestOfDay
-            ? `內容與上次匯入相同（${RECHECK_MINUTES} 分鐘後會再確認一次）`
-            : "內容與上次匯入相同，且同一天有更新的檔案（不重送舊版本）"
-        );
+      // **派遣單只認檔名**：這個檔名送過就永遠不再送（使用者 2026-08-05 決定）。
+      // 同名檔案內容被改掉也不重送——那種情況由人工從內勤後台上傳。
+      // 託運報表不同：同一份報表會被更新覆蓋，所以仍然比對內容雜湊。
+      const hash = createHash("sha256").update(readFileSync(filePath)).digest("hex");
+      if (prev && (rule.kind === "orders" || prev.hash === hash)) {
+        logSkipOnce(filePath, rule.kind === "orders" ? "這個檔名已經匯入過（只認檔名，不重送）" : "內容與上次匯入相同");
         continue;
       }
 
       try {
-        await importFile(filePath, rule, { recheck: sameContent });
+        await importFile(filePath, rule);
         state[filePath] = { hash, importedAt: new Date().toISOString() };
         saveState(state);
         skipLogged.delete(filePath);
@@ -352,11 +316,7 @@ log(`開始監看 v${VERSION}（每 ${POLL_SECONDS} 秒掃一次）→ ${API_BAS
 if (/onrender\.com/.test(API_BASE)) {
   log("  ⚠ 目前指向舊的 Render 後端，請把 .env 的 API_BASE 改成 Cloud Run 網址");
 }
-log(
-  RECHECK_MINUTES > 0
-    ? `  當天的派遣單即使內容沒變，每 ${RECHECK_MINUTES} 分鐘也會重送一次（被刪掉的資料會自己補回來）`
-    : "  已關閉例行重送（RECHECK_MINUTES=0），只有檔案內容變了才會匯入"
-);
+log("  派遣單只認檔名：沒送過的檔名就送一次，送過的不再重送（同名檔案改內容也不會重送）");
 for (const w of WATCH) {
   if (!existsSync(w.dir)) {
     mkdirSync(w.dir, { recursive: true });
