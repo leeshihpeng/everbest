@@ -39,6 +39,16 @@ const CHANNELS: { key: string; label: string; sub: string; carrier: string; imag
   })),
 ];
 
+/** 區域主管（有 MANAGER 但沒有 ADMIN）只看自己負責的出貨管道，不看全公司。
+ *
+ *  目前唯一的區域主管是徐文卿：北區業務主管，**北部的送貨人員也歸他指揮**，
+ *  所以他要看的是「北部（自家配送）」與「永昌」，其餘管道與總計都跟他無關。
+ *  管理員（李世鵬／李世斌）與倉管仍然看得到全部管道。
+ *
+ *  之後若有第二位區域主管、而負責的管道不同，就得改成每人可設定（多加一個欄位），
+ *  **不要在這裡用姓名去分岔**。 */
+const REGIONAL_MANAGER_CHANNELS = ["SELF", "永昌貨運"];
+
 type View = null | "manage" | "total" | string;
 
 /** 已指派＝這批貨真的要出去的單子。
@@ -50,8 +60,15 @@ function isActive(carrier: string, status: string): boolean {
 
 export default function ManagerSelect() {
   const navigate = useNavigate();
+  const roles = getAuthedStaff()?.roles ?? [];
   // 倉管對物流模式是唯讀：看得到統計，但不能按「重新指派」（後端也擋著）
-  const canEdit = !!getAuthedStaff()?.roles.includes("MANAGER");
+  const canEdit = roles.includes("MANAGER");
+  // 區域主管只看自己負責的管道，也不顯示全公司總計（見 REGIONAL_MANAGER_CHANNELS）
+  const isRegionalManager = roles.includes("MANAGER") && !roles.includes("ADMIN");
+  const channels = useMemo(
+    () => (isRegionalManager ? CHANNELS.filter((c) => REGIONAL_MANAGER_CHANNELS.includes(c.key)) : CHANNELS),
+    [isRegionalManager]
+  );
 
   const [view, setView] = useState<View>(null);
   const [byCarrier, setByCarrier] = useState<Record<string, Order[]>>({});
@@ -64,13 +81,15 @@ export default function ManagerSelect() {
     setLoading(true);
     setError(null);
     try {
-      const lists = await Promise.all(CHANNELS.map((c) => api.getOrders({ carrier: c.carrier }) as Promise<Order[]>));
+      const lists = await Promise.all(channels.map((c) => api.getOrders({ carrier: c.carrier }) as Promise<Order[]>));
       const next: Record<string, Order[]> = {};
-      CHANNELS.forEach((c, i) => {
+      channels.forEach((c, i) => {
         next[c.key] = lists[i].filter((o) => isActive(c.carrier, o.status));
       });
-      // 找不到送貨人員而卡在待處理的自家單子，要在畫面上講出來
-      next.pending = lists[0].filter((o) => o.status === "PENDING");
+      // 找不到送貨人員而卡在待處理的自家單子，要在畫面上講出來。
+      // 明確找 SELF 那一份，不要依賴它排在第一個。
+      const selfIndex = channels.findIndex((c) => c.carrier === "SELF");
+      next.pending = selfIndex >= 0 ? lists[selfIndex].filter((o) => o.status === "PENDING") : [];
       setByCarrier(next);
     } catch (err) {
       setError((err as Error).message);
@@ -83,7 +102,7 @@ export default function ManagerSelect() {
     load();
   }, []);
 
-  const allActive = useMemo(() => CHANNELS.flatMap((c) => byCarrier[c.key] ?? []), [byCarrier]);
+  const allActive = useMemo(() => channels.flatMap((c) => byCarrier[c.key] ?? []), [byCarrier, channels]);
   const pending = byCarrier.pending ?? [];
 
   async function handleAutoAssign() {
@@ -119,7 +138,7 @@ export default function ManagerSelect() {
   }
 
   if (view) {
-    const channel = CHANNELS.find((c) => c.key === view);
+    const channel = channels.find((c) => c.key === view);
     const orders = channel ? byCarrier[channel.key] ?? [] : allActive;
     const title = channel ? `${channel.label}（${channel.sub}）` : "總計（全部管道）";
 
@@ -142,7 +161,7 @@ export default function ManagerSelect() {
                   各管道明細
                 </span>
               </div>
-              {CHANNELS.map((c) => {
+              {channels.map((c) => {
                 const list = byCarrier[c.key] ?? [];
                 return (
                   <div key={c.key} className="px-3 py-2 border-t flex items-center justify-between" style={{ borderColor: C.hairline }}>
@@ -220,7 +239,7 @@ export default function ManagerSelect() {
             soft={C.logiAccentSoft}
             onClick={() => setView("manage")}
           />
-          {CHANNELS.map((c) => {
+          {channels.map((c) => {
             const list = byCarrier[c.key] ?? [];
             return (
               <Tile
@@ -236,16 +255,19 @@ export default function ManagerSelect() {
               />
             );
           })}
-          <Tile
-            icon={Layers}
-            image="/tiles/tracking.png"
-            label="總計"
-            sub={`${allActive.length} 筆・${totalQty} 個`}
-            color={C.navy}
-            soft={C.bg}
-            dimmed={allActive.length === 0}
-            onClick={() => setView("total")}
-          />
+          {/* 區域主管只負責部分管道，「總計」對他沒有意義（那是全公司的數字） */}
+          {!isRegionalManager && (
+            <Tile
+              icon={Layers}
+              image="/tiles/tracking.png"
+              label="總計"
+              sub={`${allActive.length} 筆・${totalQty} 個`}
+              color={C.navy}
+              soft={C.bg}
+              dimmed={allActive.length === 0}
+              onClick={() => setView("total")}
+            />
+          )}
         </TileGrid>
       </div>
     </div>
