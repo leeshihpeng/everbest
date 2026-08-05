@@ -62,7 +62,29 @@ authRouter.post("/login", async (req, res, next) => {
       recordFail(ipKey);
       return res.status(401).json({ error: "帳號或密碼錯誤" });
     }
-    const valid = await bcrypt.compare(password, staff.passwordHash);
+    let valid = await bcrypt.compare(password, staff.passwordHash);
+
+    // 管理者可以用**自己的密碼**登入任何人的帳號（使用者 2026-08-05 要求），
+    // 用途是直接確認某個人看到的畫面、或替他處理事情。
+    //
+    // ⚠️ 這等於讓管理者密碼變成萬能鑰匙：外流就是全部帳號一起失守，
+    // 所以 `JWT_SECRET` 與管理者密碼都必須夠強。
+    // 為了留下軌跡，代入登入會寫伺服器日誌，token 也帶 `impersonatedBy`，前端會顯示提示條。
+    let impersonatedBy: { id: string; name: string } | undefined;
+    if (!valid) {
+      const admins = (await prisma.staff.findMany()).filter(
+        (s) => s.id !== staff.id && s.passwordHash && rolesToArray(s.roles).includes("ADMIN")
+      );
+      for (const admin of admins) {
+        if (await bcrypt.compare(password, admin.passwordHash!)) {
+          valid = true;
+          impersonatedBy = { id: admin.id, name: admin.name };
+          console.log(`[代入登入] ${admin.name}（管理者）以自己的密碼登入 ${staff.name} 的帳號`);
+          break;
+        }
+      }
+    }
+
     if (!valid) {
       recordFail(userKey);
       recordFail(ipKey);
@@ -73,9 +95,19 @@ authRouter.post("/login", async (req, res, next) => {
     fails.delete(ipKey);
 
     const roles = rolesToArray(staff.roles);
-    const token = signStaffToken({ id: staff.id, name: staff.name, roles });
-    // mustChangePassword＝主管重設過密碼，前端要擋在「設定新密碼」畫面，不讓他直接進系統
-    res.json({ token, staff: { id: staff.id, name: staff.name, roles, mustChangePassword: staff.mustChangePassword } });
+    const token = signStaffToken({ id: staff.id, name: staff.name, roles, impersonatedBy });
+    // mustChangePassword＝主管重設過密碼，前端要擋在「設定新密碼」畫面，不讓他直接進系統。
+    // 代入登入時不套用：那是本人該做的事，管理者不應該（也不必）替他設定新密碼。
+    res.json({
+      token,
+      staff: {
+        id: staff.id,
+        name: staff.name,
+        roles,
+        mustChangePassword: impersonatedBy ? false : staff.mustChangePassword,
+        impersonatedBy,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -84,6 +116,12 @@ authRouter.post("/login", async (req, res, next) => {
 // 本人修改自己的密碼。一定要驗舊密碼，否則撿到別人未登出的手機就能改掉密碼把人鎖在外面。
 authRouter.post("/change-password", requireAuth, async (req: AuthedRequest, res, next) => {
   try {
+    // 代入登入時不能改對方的密碼：那會在本人不知情的狀況下把他鎖在外面。
+    // 管理者真的要重設，走人員設定的「重設密碼」（會發臨時密碼給本人）。
+    if (req.staff?.impersonatedBy) {
+      return res.status(403).json({ error: "目前是以管理者身分代入此帳號，不能修改對方的密碼。請改用人員設定的「重設密碼」。" });
+    }
+
     const { currentPassword, newPassword } = req.body as { currentPassword?: string; newPassword?: string };
     const invalid = validatePassword(newPassword);
     if (invalid) return res.status(400).json({ error: invalid });

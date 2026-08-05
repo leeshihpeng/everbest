@@ -4,6 +4,9 @@ export interface AuthedStaff {
   roles: string[];
   /** 主管重設過密碼：進系統前必須先設定自己的新密碼 */
   mustChangePassword?: boolean;
+  /** 代入登入：管理者用自己的密碼進了這個帳號。有值就要在畫面上講明白，
+   *  否則會忘記自己正在別人的帳號裡操作。 */
+  impersonatedBy?: { id: string; name: string };
 }
 
 const STAFF_KEY = "staff";

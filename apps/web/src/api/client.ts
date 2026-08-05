@@ -106,7 +106,17 @@ export interface QuoteSheet {
 
 export const api = {
   login: (name: string, password: string) =>
-    request<{ token: string; staff: { id: string; name: string; roles: string[]; mustChangePassword?: boolean } }>("/auth/login", {
+    request<{
+      token: string;
+      staff: {
+        id: string;
+        name: string;
+        roles: string[];
+        mustChangePassword?: boolean;
+        // 管理者用自己的密碼代入這個帳號時才有值
+        impersonatedBy?: { id: string; name: string };
+      };
+    }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ name, password }),
     }),

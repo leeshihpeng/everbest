@@ -18,11 +18,18 @@ if (!JWT_SECRET) {
 // 本機沒設就用隨機值，確保絕不會有一組寫死在原始碼裡的共用密鑰
 const SECRET = JWT_SECRET ?? randomBytes(32).toString("hex");
 
-export interface AuthedRequest extends Request {
-  staff?: { id: string; name: string; roles: string[] };
+/** 代入登入：管理者用自己的密碼登入別人的帳號時，記下真正在操作的人。
+ *  一般登入沒有這個欄位。 */
+export interface Impersonation {
+  id: string;
+  name: string;
 }
 
-export function signStaffToken(staff: { id: string; name: string; roles: string[] }): string {
+export interface AuthedRequest extends Request {
+  staff?: { id: string; name: string; roles: string[]; impersonatedBy?: Impersonation };
+}
+
+export function signStaffToken(staff: { id: string; name: string; roles: string[]; impersonatedBy?: Impersonation }): string {
   // 自己帶毫秒級的簽發時間：JWT 內建的 iat 只精確到秒，
   // 「改完密碼後立刻簽出的新 token」會跟「改密碼前一刻的舊 token」落在同一秒而分不出來。
   return jwt.sign({ ...staff, iatMs: Date.now() }, SECRET, { expiresIn: "30d" });
@@ -42,9 +49,10 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
     return res.status(401).json({ error: "未登入" });
   }
 
-  let payload: { id?: string; iat?: number; iatMs?: number };
+  type Payload = { id?: string; iat?: number; iatMs?: number; impersonatedBy?: Impersonation };
+  let payload: Payload;
   try {
-    payload = jwt.verify(header.slice(7), SECRET) as { id?: string; iat?: number; iatMs?: number };
+    payload = jwt.verify(header.slice(7), SECRET) as Payload;
   } catch {
     return res.status(401).json({ error: "登入已過期，請重新登入" });
   }
@@ -67,8 +75,29 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
       }
     }
 
+    // 代入登入的憑證，也要跟著**管理者自己**的密碼變更失效——
+    // 否則管理者發現密碼外流而改密碼後，用舊密碼代入開出來的 session 還能繼續用。
+    if (payload.impersonatedBy?.id) {
+      const admin = await prisma.staff.findUnique({
+        where: { id: payload.impersonatedBy.id },
+        select: { roles: true, passwordChangedAt: true },
+      });
+      if (!admin || !rolesToArray(admin.roles).includes("ADMIN")) {
+        return res.status(401).json({ error: "代入登入的管理者權限已變更，請重新登入" });
+      }
+      const issuedMs = payload.iatMs ?? (payload.iat != null ? payload.iat * 1000 : 0);
+      if (admin.passwordChangedAt && issuedMs < admin.passwordChangedAt.getTime()) {
+        return res.status(401).json({ error: "管理者密碼已變更，請重新登入" });
+      }
+    }
+
     // 角色一律以資料庫為準，不用 token 裡的舊值
-    req.staff = { id: staff.id, name: staff.name, roles: rolesToArray(staff.roles) };
+    req.staff = {
+      id: staff.id,
+      name: staff.name,
+      roles: rolesToArray(staff.roles),
+      impersonatedBy: payload.impersonatedBy,
+    };
     next();
   } catch (err) {
     next(err);

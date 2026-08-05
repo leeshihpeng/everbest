@@ -126,6 +126,21 @@ function MainDirectory() {
 // 原本的「路線排程系統」首頁已移除：業務模式拿掉、物流主管與送貨人員都改成主目錄的
 // 獨立入口後，那一層只剩一個選項，等於白點一下。通知鈴鐺已移到主目錄。
 
+/** 管理者用自己的密碼代入別人的帳號時，全站置頂提示。
+ *  沒有這條的話，畫面跟本人登入完全一樣，很容易忘記自己正在別人的帳號裡改東西。 */
+function ImpersonationBanner() {
+  const staff = getAuthedStaff();
+  if (!staff?.impersonatedBy) return null;
+  return (
+    <div
+      style={{ background: C.gold, color: "#fff" }}
+      className="px-3 py-1.5 text-[11px] font-bold text-center leading-snug"
+    >
+      你（{staff.impersonatedBy.name}）目前以管理者身分進入「{staff.name}」的帳號，操作會記在對方名下
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -137,6 +152,7 @@ export default function App() {
           className="overflow-hidden relative w-full sm:rounded-3xl sm:shadow-2xl"
         >
           <div className="relative min-h-[100dvh] sm:min-h-[780px]">
+            <ImpersonationBanner />
             <Routes>
               <Route path="/login" element={<Login />} />
               {/* 不能包 RequireAuth，否則被重設密碼的人會在這裡無限轉圈 */}
