@@ -24,7 +24,16 @@ export interface ParsedOrderRow {
   orderNo?: string; // 出貨編號（新竹／大榮的派遣單有）
   weight?: number; // 重量（新竹／大榮的派遣單有）
   orderNote?: string; // 貨單附註（原文照抄顯示給送貨人員）
+  /** 貨運行 ID（永昌回頭車的匯出檔才有）。一份檔案混著兩家，靠這欄分流。 */
+  carrierId?: string;
 }
+
+/** 貨運行 ID → 配送方式。永昌＝4、回頭車＝3（使用者 2026-08-05 指定）。
+ *  只有「永昌回頭車」那份匯出檔有這一欄，其他檔案不受影響。 */
+export const CARRIER_BY_ID: Record<string, string> = {
+  "3": "回頭車",
+  "4": "永昌貨運",
+};
 
 const TRUE_VALUES = new Set(["是", "true", "TRUE", "1", "yes", "Y", "y", "V", "v"]);
 
@@ -41,6 +50,7 @@ const HEADER_ALIASES: Record<string, string[]> = {
   note: ["託運備註", "備註"],
   // 貨單附註是獨立一欄，**不能**放「備註」這個別名，否則會跟上面拿來解析品項的欄位互搶
   orderNote: ["貨單附註", "附註", "貨單備註", "出貨附註"],
+  carrierId: ["貨運行ID", "貨運行id", "貨運行"],
   totalQuantity: ["訂貨數量之總計", "總數量", "總計數量", "數量總計"],
   orderNo: ["出貨編號之第一筆", "出貨編號", "出貨單號", "單號"],
   weight: ["重量", "總重量"],
@@ -175,6 +185,26 @@ export function parseDispatchOrderCsv(buffer: Buffer): ParsedOrderRow[] {
     return "";
   };
 
+  // 「永昌回頭車」那份匯出檔多了一欄貨運行 ID，而且**各列的欄位數不一致**（8 欄或 9 欄），
+  // 用標題對位會抓錯：實測第 1 列的貨運行 ID 讀成空字串、第 3 列讀成貨單附註的「萬丹路」，
+  // 整批單子就會被分到錯的貨運行。
+  // 可靠的規律是：訂貨數量之總計之後的尾段裡，**最後一個非空欄位就是貨運行 ID**，
+  // 它前面那個非空欄位才是貨單附註。只有這種檔案走這條路，其他匯出檔完全不受影響。
+  const headerCells = (rawRows[0] ?? []).map((h) => normalizeKey(String(h ?? "")));
+  const hasHeader = (aliases: string[]) => headerCells.some((h) => aliases.some((a) => normalizeKey(a) === h));
+  const hasCarrierId = hasHeader(HEADER_ALIASES.carrierId);
+  const totalQtyIdx = headerCells.findIndex((h) => HEADER_ALIASES.totalQuantity.some((a) => normalizeKey(a) === h));
+  const tailStart = totalQtyIdx >= 0 ? totalQtyIdx + 1 : headerLen;
+
+  const tailOf = (rowIndex: number): { carrierId: string; orderNote: string } => {
+    const tail = (rawRows[rowIndex + 1] ?? []).slice(tailStart).map((v) => (v ?? "").trim());
+    const filled = tail.filter(Boolean);
+    return {
+      carrierId: filled[filled.length - 1] ?? "",
+      orderNote: filled[filled.length - 2] ?? "",
+    };
+  };
+
   return records
     .map((r, rowIndex) => {
       const note = pickField(r, HEADER_ALIASES.note);
@@ -189,6 +219,8 @@ export function parseDispatchOrderCsv(buffer: Buffer): ParsedOrderRow[] {
       // 新竹的派遣單沒有「出貨日期」欄，改由出貨編號開頭取日期
       const deliveryDate = normalizeDeliveryDate(pickField(r, HEADER_ALIASES.deliveryDate)) || dateFromOrderNo(orderNo);
       const weight = pickField(r, HEADER_ALIASES.weight);
+      // 有貨運行 ID 欄的檔案一律用位置解析尾段（見上方說明），不要相信欄位名稱對位的結果
+      const tail = hasCarrierId ? tailOf(rowIndex) : null;
 
       return {
         deliveryDate,
@@ -201,7 +233,8 @@ export function parseDispatchOrderCsv(buffer: Buffer): ParsedOrderRow[] {
         totalQuantity: pickField(r, HEADER_ALIASES.totalQuantity) ? Number(pickField(r, HEADER_ALIASES.totalQuantity)) : undefined,
         orderNo: orderNo || undefined,
         weight: weight ? Number(weight) : undefined,
-        orderNote: pickField(r, HEADER_ALIASES.orderNote) || extraNoteOf(rowIndex) || undefined,
+        orderNote: (tail ? tail.orderNote : pickField(r, HEADER_ALIASES.orderNote) || extraNoteOf(rowIndex)) || undefined,
+        carrierId: tail?.carrierId || undefined,
       };
     })
     .filter((r) => r.customerName !== "");

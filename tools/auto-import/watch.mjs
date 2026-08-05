@@ -57,6 +57,7 @@ if (!IMPORT_KEY) {
 const DIR_SELF = env.DIR_SELF || String.raw`C:\server\出貨派遣`;
 const DIR_HSINCHU = env.DIR_HSINCHU || String.raw`C:\server\新竹貨運`;
 const DIR_DALEN = env.DIR_DALEN || String.raw`C:\server\大榮貨運`;
+const DIR_YONGCHANG = env.DIR_YONGCHANG || String.raw`C:\server\永昌回頭車`;
 
 /** 檔名裡的日期編號（YYYYMMDD），例如 `出貨派遣單20260730.CSV`、`202607\20260729-2.CSV`。
  *
@@ -83,6 +84,19 @@ const WATCH = [
   { dir: DIR_SELF, kind: "orders", carrier: "SELF", label: "派遣單", match: /\.(csv|txt)$/i, todayOnly: true, datedOnly: true, recursive: true },
   { dir: DIR_HSINCHU, kind: "orders", carrier: "新竹貨運", label: "新竹派遣單", match: /\.(csv|txt)$/i, todayOnly: true, datedOnly: true, recursive: true },
   { dir: DIR_DALEN, kind: "orders", carrier: "大榮貨運", label: "大榮派遣單", match: /\.(csv|txt)$/i, todayOnly: true, datedOnly: true, recursive: true },
+  // 永昌與回頭車**共用一份匯出檔**（`202608\20260805.CSV`），靠檔案裡的「貨運行ID」欄
+  // 分流（4＝永昌、3＝回頭車），所以 carrier 傳 AUTO 讓後端逐列判斷。
+  // 檔名規則與新竹／大榮相同：年月子資料夾＋帶日期的檔名。
+  {
+    dir: DIR_YONGCHANG,
+    kind: "orders",
+    carrier: "AUTO",
+    label: "永昌／回頭車派遣單",
+    match: /\.(csv|txt)$/i,
+    todayOnly: true,
+    datedOnly: true,
+    recursive: true,
+  },
   // 託運報表不限當天：報表可能是前幾天出的，只要內容有更新就重新匯入並覆蓋上次版本。
   // 檔案放在年月子資料夾，所以要往下找。
   { dir: DIR_HSINCHU, kind: "shipments", label: "新竹貨物追蹤", match: /^pdfsummary.*\.pdf$/i, recursive: true },
