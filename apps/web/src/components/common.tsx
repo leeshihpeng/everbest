@@ -225,6 +225,29 @@ export function Tile({
 
 /** 派遣日期＝派遣單匯入（檔案上傳）的日期，顯示成 MM/DD。
  *  用台灣時間換算，否則 UTC 會讓清晨匯入的單子顯示成前一天。 */
+/** 台灣時區的日期字串（YYYY-MM-DD）。伺服器與瀏覽器都可能不是 +8，
+ *  直接用 `toISOString()` 會讓清晨 8 點前的資料算成前一天。 */
+function taipeiDay(d: Date): string {
+  return new Date(d.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/** 這個時間是不是台灣的今天。用來判斷「今天完成的單子」要不要繼續留在畫面上。 */
+export function isTaipeiToday(iso?: string | null): boolean {
+  if (!iso) return false;
+  return taipeiDay(new Date(iso)) === taipeiDay(new Date());
+}
+
+/** 物流管理統計保留的天數。與貨物追蹤一致，超過就不再列入總計
+ *  （只是不顯示，**資料本身沒有刪除**）。 */
+export const STATS_KEEP_DAYS = 14;
+
+/** 這個日期是否落在統計保留期間內（含未來日期：預定明天送的單子也要算）。 */
+export function withinStatsWindow(iso?: string | null): boolean {
+  if (!iso) return true; // 沒有日期就不因為日期而排除，交給狀態條件判斷
+  const cutoff = taipeiDay(new Date(Date.now() - STATS_KEEP_DAYS * 24 * 60 * 60 * 1000));
+  return taipeiDay(new Date(iso)) >= cutoff;
+}
+
 export function dispatchDate(iso?: string | null): string {
   if (!iso) return "";
   const d = new Date(new Date(iso).getTime() + 8 * 60 * 60 * 1000);

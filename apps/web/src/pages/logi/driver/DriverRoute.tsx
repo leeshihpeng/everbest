@@ -5,7 +5,7 @@ import { Check, RotateCcw, HelpCircle, ChevronUp, ChevronDown, Trash2, Map as Ma
 import { api } from "../../../api/client";
 import { getAuthedStaff, isDriverOnly } from "../../../lib/auth";
 import { dispatchCityOf, dispatchCityIndex } from "../../../lib/taiwanCities";
-import { C, TopBar, Pill, Checkbox, RouteTimeline, ActionRow, TimelineRoute, ProductSummary, QtySubtotal, sumQty, DispatchDateTag, HeaderActions } from "../../../components/common";
+import { C, TopBar, Pill, Checkbox, RouteTimeline, ActionRow, TimelineRoute, ProductSummary, QtySubtotal, sumQty, DispatchDateTag, HeaderActions, isTaipeiToday } from "../../../components/common";
 import { buildNavigationUrl } from "../../../lib/googleMapsLoader";
 import { formatRouteShareText, shareRouteText } from "../../../lib/routeShare";
 
@@ -29,6 +29,7 @@ interface Order {
   status: string;
   orderNote?: string | null;
   createdAt?: string; // 派遣單匯入（檔案上傳）的時間
+  updatedAt?: string; // 最後異動時間；用來判斷「是不是今天完成的」
   routeSequence?: number | null;
   routeOrderManual?: boolean;
   inRoute: boolean; // 這趟要不要送（取消勾選＝留在名單但不排進路線）
@@ -129,10 +130,17 @@ export default function DriverRoute() {
     (async () => {
       try {
         const [orderList, staffList, s] = await Promise.all([api.getOrders({}), api.getStaff(), api.getSettings()]);
+        // **今天送完的單子要留在畫面上**（使用者 2026-08-05 要求）：原本一按完成就整筆消失，
+        // 看不出自己今天送了哪幾家，也沒辦法按錯再取消。改成留著並顯示為已完成（刪除線＋綠色）。
+        // 只留「今天完成的」，否則過幾天畫面會被歷史單子淹沒。
         const mine: Order[] = orderList.filter(
-          (o: Order) => o.assignedDriverId === me.id && (o.status === "SELECTED" || o.status === "DISPATCHED")
+          (o: Order) =>
+            o.assignedDriverId === me.id &&
+            (o.status === "SELECTED" || o.status === "DISPATCHED" || (o.status === "COMPLETED" && isTaipeiToday(o.updatedAt)))
         );
         setOrders(mine);
+        // 已完成的要一併回填，否則重新整理後會變回「待完成」而且又被排進路線
+        setCompleted(new Set(mine.filter((o) => o.status === "COMPLETED").map((o) => o.id)));
         // 之前調整過順序就沿用（換手機、重新整理都還在）。orderList 已依 routeSequence 排序。
         if (mine.some((o) => o.routeOrderManual)) {
           setManualOrder(mine.filter((o) => o.lat != null && o.lng != null).map((o) => o.id));
@@ -443,7 +451,7 @@ export default function DriverRoute() {
             取消勾選與已送達的不列入，否則裝車會多帶 */}
         {assignedOrders.length > 0 && (
           <ProductSummary
-            title="今日配送貨品總計"
+            title="尚未送達貨品總計"
             items={assignedOrders.flatMap((o) => o.items)}
             orderCount={assignedOrders.length}
             accent={C.logiAccent}

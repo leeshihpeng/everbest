@@ -4,7 +4,18 @@ import { ClipboardList, Truck, Layers, AlertTriangle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../../../api/client";
 import OrdersPanel from "../../admin/OrdersPanel";
-import { C, TopBar, TileGrid, Tile, ProductSummary, QtySubtotal, sumQty, DispatchDateTag } from "../../../components/common";
+import {
+  C,
+  TopBar,
+  TileGrid,
+  Tile,
+  ProductSummary,
+  QtySubtotal,
+  sumQty,
+  DispatchDateTag,
+  withinStatsWindow,
+  STATS_KEEP_DAYS,
+} from "../../../components/common";
 import { DISPATCH_CARRIERS } from "../../../lib/carriers";
 import { dispatchCityOf, dispatchCityIndex } from "../../../lib/taiwanCities";
 import { getAuthedStaff } from "../../../lib/auth";
@@ -22,6 +33,7 @@ interface Order {
   status: string;
   orderNote?: string | null;
   createdAt?: string;
+  deliveryDate?: string;
   items: OrderItem[];
 }
 
@@ -51,11 +63,17 @@ const REGIONAL_MANAGER_CHANNELS = ["SELF", "永昌貨運"];
 
 type View = null | "manage" | "total" | string;
 
-/** 已指派＝這批貨真的要出去的單子。
- *  自家配送：已指派給送貨人員（SELECTED）或已檢貨（DISPATCHED）。
- *  貨運行：還沒交給貨運行的都算（已刪除的後端就不會回傳了）。 */
-function isActive(carrier: string, status: string): boolean {
-  return carrier === "SELF" ? status === "SELECTED" || status === "DISPATCHED" : status !== "COMPLETED";
+/** 列入統計的單子。
+ *
+ *  **已完成的也要算**（使用者 2026-08-05 要求）：原本一送完就從統計消失，
+ *  當天的總量會愈看愈少，對不起來。改成保留最近 `STATS_KEEP_DAYS` 天，
+ *  跟貨物追蹤一樣的做法——只是**不列入統計**，資料本身沒有刪除。
+ *
+ *  自家配送仍排除「待處理」（PENDING）：那是還沒指派出去的，首頁另有警告區塊在講。
+ *  已刪除（CANCELLED）後端就不會回傳。 */
+function isActive(carrier: string, o: Order): boolean {
+  if (!withinStatsWindow(o.deliveryDate)) return false;
+  return carrier === "SELF" ? o.status !== "PENDING" : true;
 }
 
 export default function ManagerSelect() {
@@ -84,7 +102,7 @@ export default function ManagerSelect() {
       const lists = await Promise.all(channels.map((c) => api.getOrders({ carrier: c.carrier }) as Promise<Order[]>));
       const next: Record<string, Order[]> = {};
       channels.forEach((c, i) => {
-        next[c.key] = lists[i].filter((o) => isActive(c.carrier, o.status));
+        next[c.key] = lists[i].filter((o) => isActive(c.carrier, o));
       });
       // 找不到送貨人員而卡在待處理的自家單子，要在畫面上講出來。
       // 明確找 SELF 那一份，不要依賴它排在第一個。
@@ -269,6 +287,10 @@ export default function ManagerSelect() {
             />
           )}
         </TileGrid>
+        {/* 統計含已完成的單子，不寫清楚會讓人以為數字沒更新 */}
+        <div style={{ color: C.muted }} className="text-[11px] mt-3 leading-relaxed">
+          統計含已完成配送的單子，保留最近 {STATS_KEEP_DAYS} 天。
+        </div>
       </div>
     </div>
   );

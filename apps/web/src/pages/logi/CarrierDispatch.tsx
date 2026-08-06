@@ -57,9 +57,9 @@ export default function CarrierDispatch() {
     setLoading(true);
     setError(null);
     try {
-      const list = (await api.getOrders({ carrier: c })) as Order[];
-      // 已完成的不再顯示，畫面只留今天還要處理的
-      setOrders(list.filter((o) => o.status !== "COMPLETED"));
+      // **已交出去的也留在畫面上**（使用者 2026-08-05 要求），只是按鈕變色。
+      // 原本一按就整筆消失，看不出到底交了哪幾家、也沒辦法按錯再取消。
+      setOrders(await api.getOrders({ carrier: c }) as Order[]);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -177,7 +177,7 @@ export default function CarrierDispatch() {
         ) : (
           <>
             <ProductSummary
-              title={`${carrier}貨品總計`}
+              title={`${carrier}貨品總計（未交出去的）`}
               items={summaryItems}
               orderCount={summaryOrders.length}
               accent={C.logiAccent}
