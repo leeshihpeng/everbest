@@ -51,6 +51,9 @@ function MainDirectory() {
   const canCarrierDispatch = !!staff && (staff.roles.includes("WAREHOUSE") || staff.roles.includes("ADMIN"));
   // 物流管理（派遣單與貨品統計）是主目錄的獨立入口；倉管進去是唯讀
   const canLogiManager = !!staff && (staff.roles.includes("MANAGER") || staff.roles.includes("WAREHOUSE"));
+  // 貨運追蹤倉管也能看（使用者 2026-08-06 開放給何志偉、張瓊月）。
+  // 倉管沒有業務範圍，後端另外讓他們看全部區域，否則會是一片空白。
+  const canTracking = canBizSystems || !!staff?.roles.includes("WAREHOUSE");
 
   // 只送貨的人在主目錄沒有其他可選項目，直接帶到今日配送名單
   if (staff && isDriverOnly(staff.roles)) return <Navigate to="/logi/driver" replace />;
@@ -70,7 +73,7 @@ function MainDirectory() {
     { key: "carrier", label: "貨運派遣", sub: "新竹／大榮清點", icon: Truck, image: "/tiles/carrier.png", to: "/carrier", color: C.logiAccent, soft: C.logiAccentSoft, show: canCarrierDispatch },
     { key: "inspection", label: "檢驗報告", sub: "查詢與管理", icon: ClipboardCheck, image: "/tiles/inspection.png", to: "/inspection", color: C.bizAccent, soft: C.bizAccentSoft, show: canBizSystems },
     { key: "permit", label: "輸入許可證", sub: "進口許可證", icon: FileText, image: "/tiles/permit.png", to: "/permit", color: C.gold, soft: C.goldSoft, show: canBizSystems },
-    { key: "tracking", label: "貨運追蹤", sub: "出貨狀態追蹤", icon: PackageSearch, image: "/tiles/tracking.png", to: "/tracking", color: C.navy, soft: "#EDEFF2", show: canBizSystems },
+    { key: "tracking", label: "貨運追蹤", sub: "出貨狀態追蹤", icon: PackageSearch, image: "/tiles/tracking.png", to: "/tracking", color: C.navy, soft: "#EDEFF2", show: canTracking },
     { key: "quote", label: "產品報價單", sub: "規格與價格", icon: Tags, image: "/tiles/quote.png", to: "/quote", color: C.logiAccent, soft: C.logiAccentSoft, show: canBizSystems },
   ];
 
@@ -186,7 +189,8 @@ export default function App() {
               <Route
                 path="/tracking"
                 element={
-                  <RequireRole role={["SALES", "MANAGER"]}>
+                  // 倉管也看得到（2026-08-06）；後端 shipments 路由的角色清單要一致
+                  <RequireRole role={["SALES", "MANAGER", "WAREHOUSE"]}>
                     <ShipmentTracking />
                   </RequireRole>
                 }

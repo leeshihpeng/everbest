@@ -27,6 +27,12 @@ async function allowedRegionsFor(req: AuthedRequest): Promise<string[]> {
   const roles = req.staff?.roles ?? [];
   if (roles.includes("ADMIN")) return [...ALL_REGIONS, UNCLASSIFIED];
 
+  // 倉管看全部區域（使用者 2026-08-06 開放）。區域限制的用意是讓業務只看到自己的客戶，
+  // 但倉管在倉庫裡本來就要處理所有貨，而且他們**沒有設業務範圍**——
+  // 只加角色不給區域的話，他們點進去會是一片空白。
+  // 「未分類」仍只有 ADMIN 看得到：那是資料判讀不出縣市時的待處理桶，由內勤修。
+  if (roles.includes("WAREHOUSE")) return [...ALL_REGIONS];
+
   const staff = await prisma.staff.findUnique({ where: { id: req.staff!.id }, select: { salesRegions: true } });
   const cities = staff?.salesRegions ? staff.salesRegions.split(",").map((c) => c.trim()).filter(Boolean) : [];
   const regions = new Set<string>();
@@ -38,7 +44,7 @@ async function allowedRegionsFor(req: AuthedRequest): Promise<string[]> {
 }
 
 // 六個目錄（業者 × 區域）與各自筆數；只回使用者有權限的區域
-shipmentsRouter.get("/folders", requireRole(["SALES", "MANAGER"]), async (req: AuthedRequest, res, next) => {
+shipmentsRouter.get("/folders", requireRole(["SALES", "MANAGER", "WAREHOUSE"]), async (req: AuthedRequest, res, next) => {
   try {
     const allowed = await allowedRegionsFor(req);
     // 圖示下方只顯示「最新一份報表」的筆數，不把保留兩週的資料全部加總。
@@ -94,7 +100,7 @@ shipmentsRouter.get("/folders", requireRole(["SALES", "MANAGER"]), async (req: A
 });
 
 // 某業者某區域的託運明細
-shipmentsRouter.get("/", requireRole(["SALES", "MANAGER"]), async (req: AuthedRequest, res, next) => {
+shipmentsRouter.get("/", requireRole(["SALES", "MANAGER", "WAREHOUSE"]), async (req: AuthedRequest, res, next) => {
   try {
     const { carrier, region } = req.query as { carrier?: string; region?: string };
     if (!carrier || !region) return res.status(400).json({ error: "請指定貨運業者與區域" });
