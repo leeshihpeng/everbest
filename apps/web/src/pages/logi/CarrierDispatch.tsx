@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Truck, Check, Trash2 } from "lucide-react";
 import { api } from "../../api/client";
-import { C, TopBar, ProductSummary, QtySubtotal, sumQty, TileGrid, Tile } from "../../components/common";
+import { C, TopBar, ProductSummary, QtySubtotal, sumQty, TileGrid, Tile, shipmentDay, taipeiToday } from "../../components/common";
 import { CARRIER_VALUES as CARRIERS } from "../../lib/carriers";
 
 interface OrderItem {
@@ -21,8 +21,13 @@ interface Order {
   orderNo?: string | null;
   weight?: number | null;
   status: string;
+  deliveryDate?: string;
   items: OrderItem[];
 }
+
+/** 貨運派遣只處理**今天要交出去的貨**：隔日就不該再看到昨天的單子
+ *  （使用者 2026-08-06 要求）。依出貨日期判斷，不是匯入時間。 */
+const isToday = (o: Order) => shipmentDay(o.deliveryDate) === taipeiToday();
 
 // 貨運派遣：交給貨運行送的派遣單，功能同送貨人員（貨品清點、逐項檢貨、配送完成），
 // 但貨運行自行安排路線，所以沒有路線規劃與導航。
@@ -43,7 +48,7 @@ export default function CarrierDispatch() {
       const result: Record<string, number> = {};
       for (const c of CARRIERS) {
         const list = (await api.getOrders({ carrier: c })) as Order[];
-        result[c] = list.filter((o) => o.status !== "COMPLETED").length;
+        result[c] = list.filter((o) => isToday(o) && o.status !== "COMPLETED").length;
       }
       setCounts(result);
     } catch (err) {
@@ -59,7 +64,8 @@ export default function CarrierDispatch() {
     try {
       // **已交出去的也留在畫面上**（使用者 2026-08-05 要求），只是按鈕變色。
       // 原本一按就整筆消失，看不出到底交了哪幾家、也沒辦法按錯再取消。
-      setOrders(await api.getOrders({ carrier: c }) as Order[]);
+      // 但只留**今天**要交的，隔日就不該再看到昨天的單子。
+      setOrders(((await api.getOrders({ carrier: c })) as Order[]).filter(isToday));
     } catch (err) {
       setError((err as Error).message);
     } finally {

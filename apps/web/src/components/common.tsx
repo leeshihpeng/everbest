@@ -238,15 +238,34 @@ export function isTaipeiToday(iso?: string | null): boolean {
   return taipeiDay(new Date(iso)) === taipeiDay(new Date());
 }
 
-/** 物流管理統計保留的天數。與貨物追蹤一致，超過就不再列入總計
- *  （只是不顯示，**資料本身沒有刪除**）。 */
+/** 台灣今天的日期字串（YYYY-MM-DD）。 */
+export function taipeiToday(): string {
+  return taipeiDay(new Date());
+}
+
+/** 出貨日期換成 YYYY-MM-DD（台灣時區）。用來把單子歸到某一天。 */
+export function shipmentDay(deliveryDate?: string | null): string {
+  return deliveryDate ? taipeiDay(new Date(deliveryDate)) : "";
+}
+
+/** 統計可以往回看幾天。**每一天各自統計**、連續保留這麼多天
+ *  （使用者 2026-08-06 說明），不是把整段期間加總。 */
 export const STATS_KEEP_DAYS = 14;
 
-/** 這個日期是否落在統計保留期間內（含未來日期：預定明天送的單子也要算）。 */
-export function withinStatsWindow(iso?: string | null): boolean {
-  if (!iso) return true; // 沒有日期就不因為日期而排除，交給狀態條件判斷
-  const cutoff = taipeiDay(new Date(Date.now() - STATS_KEEP_DAYS * 24 * 60 * 60 * 1000));
-  return taipeiDay(new Date(iso)) >= cutoff;
+/** 統計日期選單：今天往回數 `STATS_KEEP_DAYS` 天。 */
+export function recentShipmentDays(): string[] {
+  const days: string[] = [];
+  for (let i = 0; i < STATS_KEEP_DAYS; i++) days.push(taipeiDay(new Date(Date.now() - i * 86400000)));
+  return days;
+}
+
+/** 把 YYYY-MM-DD 顯示成「08/06（今天）」這種標籤。 */
+export function shipmentDayLabel(day: string): string {
+  const [, m, d] = day.split("-");
+  const today = taipeiToday();
+  const yesterday = taipeiDay(new Date(Date.now() - 86400000));
+  const suffix = day === today ? "（今天）" : day === yesterday ? "（昨天）" : "";
+  return `${m}/${d}${suffix}`;
 }
 
 export function dispatchDate(iso?: string | null): string {

@@ -13,8 +13,10 @@ import {
   QtySubtotal,
   sumQty,
   DispatchDateTag,
-  withinStatsWindow,
-  STATS_KEEP_DAYS,
+  shipmentDay,
+  taipeiToday,
+  recentShipmentDays,
+  shipmentDayLabel,
 } from "../../../components/common";
 import { DISPATCH_CARRIERS } from "../../../lib/carriers";
 import { dispatchCityOf, dispatchCityIndex } from "../../../lib/taiwanCities";
@@ -63,16 +65,20 @@ const REGIONAL_MANAGER_CHANNELS = ["SELF", "永昌貨運"];
 
 type View = null | "manage" | "total" | string;
 
-/** 列入統計的單子。
+/** 列入統計的單子（`day` 是要看哪一天的出貨，YYYY-MM-DD）。
+ *
+ *  統計是**看某一天出多少貨**，所以只算出貨日期是那一天的
+ *  （使用者 2026-08-06：總計的目的是統計今日出貨量，非今日一律排除）。
+ *  依據是 CSV 的**出貨日期**不是匯入時間——今天匯入一份出貨日是上週的檔案，
+ *  那批不該算進今天的量（實際遇過：新竹有一筆出貨日 07/30 卻在 08/06 匯入）。
  *
  *  **已完成的也要算**（使用者 2026-08-05 要求）：原本一送完就從統計消失，
- *  當天的總量會愈看愈少，對不起來。改成保留最近 `STATS_KEEP_DAYS` 天，
- *  跟貨物追蹤一樣的做法——只是**不列入統計**，資料本身沒有刪除。
+ *  當天的總量會愈看愈少，跟實際出貨對不起來。
  *
  *  自家配送仍排除「待處理」（PENDING）：那是還沒指派出去的，首頁另有警告區塊在講。
  *  已刪除（CANCELLED）後端就不會回傳。 */
-function isActive(carrier: string, o: Order): boolean {
-  if (!withinStatsWindow(o.deliveryDate)) return false;
+function isActive(carrier: string, o: Order, day: string): boolean {
+  if (shipmentDay(o.deliveryDate) !== day) return false;
   return carrier === "SELF" ? o.status !== "PENDING" : true;
 }
 
@@ -89,7 +95,10 @@ export default function ManagerSelect() {
   );
 
   const [view, setView] = useState<View>(null);
-  const [byCarrier, setByCarrier] = useState<Record<string, Order[]>>({});
+  // 未過濾的原始資料；依日期過濾在下面的 useMemo，換日期不用重新抓
+  const [rawByCarrier, setRawByCarrier] = useState<Record<string, Order[]>>({});
+  // 要看哪一天的出貨。預設今天——統計的目的就是看今天出多少貨
+  const [day, setDay] = useState<string>(taipeiToday());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
@@ -102,13 +111,13 @@ export default function ManagerSelect() {
       const lists = await Promise.all(channels.map((c) => api.getOrders({ carrier: c.carrier }) as Promise<Order[]>));
       const next: Record<string, Order[]> = {};
       channels.forEach((c, i) => {
-        next[c.key] = lists[i].filter((o) => isActive(c.carrier, o));
+        next[c.key] = lists[i];
       });
       // 找不到送貨人員而卡在待處理的自家單子，要在畫面上講出來。
       // 明確找 SELF 那一份，不要依賴它排在第一個。
       const selfIndex = channels.findIndex((c) => c.carrier === "SELF");
       next.pending = selfIndex >= 0 ? lists[selfIndex].filter((o) => o.status === "PENDING") : [];
-      setByCarrier(next);
+      setRawByCarrier(next);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -120,8 +129,16 @@ export default function ManagerSelect() {
     load();
   }, []);
 
+  // 依選定日期過濾。每一天各自統計，不是把整段期間加總。
+  const byCarrier = useMemo(() => {
+    const next: Record<string, Order[]> = {};
+    for (const c of channels) next[c.key] = (rawByCarrier[c.key] ?? []).filter((o) => isActive(c.carrier, o, day));
+    return next;
+  }, [rawByCarrier, channels, day]);
+
   const allActive = useMemo(() => channels.flatMap((c) => byCarrier[c.key] ?? []), [byCarrier, channels]);
-  const pending = byCarrier.pending ?? [];
+  // 待處理的警告不分日期：卡住的單子不管哪天的都要讓主管看到
+  const pending = rawByCarrier.pending ?? [];
 
   async function handleAutoAssign() {
     setAssigning(true);
@@ -246,6 +263,35 @@ export default function ManagerSelect() {
           </div>
         )}
 
+        {/* 統計是看「哪一天出多少貨」，預設今天。每一天各自統計，可以往回查
+            （使用者 2026-08-06：保留兩週＝每天的統計都留著，連續兩週）。 */}
+        <div className="flex items-center gap-2 mb-3">
+          <span style={{ color: C.muted, fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[12px] font-bold shrink-0">
+            出貨日期
+          </span>
+          <select
+            value={day}
+            onChange={(e) => setDay(e.target.value)}
+            className="flex-1 px-3 rounded-lg text-[13px]"
+            style={{ border: `1px solid ${C.hairline}`, background: "#fff", minHeight: 40 }}
+          >
+            {recentShipmentDays().map((d) => (
+              <option key={d} value={d}>
+                {shipmentDayLabel(d)}
+              </option>
+            ))}
+          </select>
+          {day !== taipeiToday() && (
+            <button
+              onClick={() => setDay(taipeiToday())}
+              style={{ color: C.logiAccent, border: `1px solid ${C.logiAccent}`, minHeight: 40 }}
+              className="text-[12px] font-bold px-3 rounded-lg shrink-0"
+            >
+              回今天
+            </button>
+          )}
+        </div>
+
         <TileGrid>
           {/* 這塊是「進去管理清單」的入口，不是統計。筆數由下面各管道磁磚負責，
               這裡再標一次反而讓人以為是另一個數字（使用者 2026-08-05 要求拿掉）。 */}
@@ -289,7 +335,7 @@ export default function ManagerSelect() {
         </TileGrid>
         {/* 統計含已完成的單子，不寫清楚會讓人以為數字沒更新 */}
         <div style={{ color: C.muted }} className="text-[11px] mt-3 leading-relaxed">
-          統計含已完成配送的單子，保留最近 {STATS_KEEP_DAYS} 天。
+          以上是 {shipmentDayLabel(day)} 出貨的數量，含已完成配送的單子。
         </div>
       </div>
     </div>

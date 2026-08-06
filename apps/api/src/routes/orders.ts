@@ -26,6 +26,15 @@ function startOfTodayTaipei(): Date {
   return new Date(midnightTaipei - TAIPEI_OFFSET_MS);
 }
 
+/** 統計要保留的天數。物流管理可以往回查每一天的出貨量，所以比這個更舊的才清掉。
+ *  與前端 `components/common.tsx` 的 `STATS_KEEP_DAYS` 是同一個值，改要一起改。 */
+const STATS_KEEP_DAYS = 14;
+
+/** 清除門檻：這個時間點以前建立的貨運行派遣單才會被自動刪除。 */
+function statsCutoffTaipei(): Date {
+  return new Date(startOfTodayTaipei().getTime() - STATS_KEEP_DAYS * 24 * 60 * 60 * 1000);
+}
+
 /** 整張單的訂貨內容指紋：同品名合併數量後排序，與 CSV 的列出順序無關。
  *
  *  判斷「這張單跟上次匯入是不是同一份」時，**只比客戶與送貨日期是不夠的**：
@@ -369,13 +378,16 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
       }
     }
 
-    // 貨運行派遣單每天重新上傳（同一天可分多次上傳、全部累積），
-    // 上傳時順手清掉這家貨運行「非今天上傳」的舊單，貨運派遣頁才不會混到昨天的貨。
-    // 自家配送（SELF）有勾選、指派、配送狀態，不能這樣清，維持原本手動刪除。
+    // 貨運行派遣單每天重新上傳（同一天可分多次上傳、全部累積），上傳時順手清掉太舊的。
+    //
+    // **只清 `STATS_KEEP_DAYS` 天以前的，不是「非今天」的**（使用者 2026-08-06 說明：
+    // 保留兩週＝每天的統計都留著、可以往回查）。「隔日就看不到昨天的貨」是**畫面**依
+    // 出貨日期過濾出來的（`CarrierDispatch` 只顯示今天），不是靠刪資料達成。
+    // 自家配送（SELF）有勾選、指派、配送狀態，一律不自動清，維持手動刪除。
     // 清除範圍限這一批的 carrier，判斷也只看這一批有沒有進東西
     if (carrier !== "SELF" && createdThisBatch.length + (updated - updatedBefore) > 0) {
       const stale = await prisma.dispatchOrder.findMany({
-        where: { carrier, createdAt: { lt: startOfTodayTaipei() } },
+        where: { carrier, createdAt: { lt: statsCutoffTaipei() } },
         select: { id: true },
       });
       const staleIds = stale.map((o) => o.id);
