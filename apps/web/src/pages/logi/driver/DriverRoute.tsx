@@ -5,7 +5,7 @@ import { Check, RotateCcw, HelpCircle, ChevronUp, ChevronDown, Trash2, Map as Ma
 import { api } from "../../../api/client";
 import { getAuthedStaff, isDriverOnly } from "../../../lib/auth";
 import { dispatchCityOf, dispatchCityIndex } from "../../../lib/taiwanCities";
-import { C, TopBar, Pill, Checkbox, RouteTimeline, ActionRow, TimelineRoute, ProductSummary, QtySubtotal, sumQty, DispatchDateTag, HeaderActions, isTaipeiToday } from "../../../components/common";
+import { C, TopBar, Pill, Checkbox, RouteTimeline, ActionRow, TimelineRoute, ProductSummary, QtySubtotal, sumQty, DispatchDateTag, HeaderActions, shipmentDay, taipeiToday } from "../../../components/common";
 import { buildNavigationUrl } from "../../../lib/googleMapsLoader";
 import { formatRouteShareText, shareRouteText } from "../../../lib/routeShare";
 
@@ -29,7 +29,8 @@ interface Order {
   status: string;
   orderNote?: string | null;
   createdAt?: string; // 派遣單匯入（檔案上傳）的時間
-  updatedAt?: string; // 最後異動時間；用來判斷「是不是今天完成的」
+  updatedAt?: string; // 最後異動時間
+  deliveryDate?: string; // 出貨日期——今日名單一律以這個為準，不是匯入時間
   routeSequence?: number | null;
   routeOrderManual?: boolean;
   inRoute: boolean; // 這趟要不要送（取消勾選＝留在名單但不排進路線）
@@ -130,13 +131,17 @@ export default function DriverRoute() {
     (async () => {
       try {
         const [orderList, staffList, s] = await Promise.all([api.getOrders({}), api.getStaff(), api.getSettings()]);
-        // **今天送完的單子要留在畫面上**（使用者 2026-08-05 要求）：原本一按完成就整筆消失，
+        // **只看今天出貨的單子**（使用者 2026-08-06）：依出貨日期，不是匯入日期——
+        // 下班前會先把明天的配送資料匯進來，用匯入日期判斷的話明天的貨今天就會冒出來。
+        // 舊日期的也不再顯示，跟貨運派遣一致。
+        //
+        // **今天送完的仍留在畫面上**（使用者 2026-08-05）：原本一按完成就整筆消失，
         // 看不出自己今天送了哪幾家，也沒辦法按錯再取消。改成留著並顯示為已完成（刪除線＋綠色）。
-        // 只留「今天完成的」，否則過幾天畫面會被歷史單子淹沒。
         const mine: Order[] = orderList.filter(
           (o: Order) =>
             o.assignedDriverId === me.id &&
-            (o.status === "SELECTED" || o.status === "DISPATCHED" || (o.status === "COMPLETED" && isTaipeiToday(o.updatedAt)))
+            shipmentDay(o.deliveryDate) === taipeiToday() &&
+            (o.status === "SELECTED" || o.status === "DISPATCHED" || o.status === "COMPLETED")
         );
         setOrders(mine);
         // 已完成的要一併回填，否則重新整理後會變回「待完成」而且又被排進路線

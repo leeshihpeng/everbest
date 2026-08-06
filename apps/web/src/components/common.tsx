@@ -232,12 +232,6 @@ function taipeiDay(d: Date): string {
   return new Date(d.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-/** 這個時間是不是台灣的今天。用來判斷「今天完成的單子」要不要繼續留在畫面上。 */
-export function isTaipeiToday(iso?: string | null): boolean {
-  if (!iso) return false;
-  return taipeiDay(new Date(iso)) === taipeiDay(new Date());
-}
-
 /** 台灣今天的日期字串（YYYY-MM-DD）。 */
 export function taipeiToday(): string {
   return taipeiDay(new Date());

@@ -30,7 +30,10 @@ function startOfTodayTaipei(): Date {
  *  與前端 `components/common.tsx` 的 `STATS_KEEP_DAYS` 是同一個值，改要一起改。 */
 const STATS_KEEP_DAYS = 14;
 
-/** 清除門檻：這個時間點以前建立的貨運行派遣單才會被自動刪除。 */
+/** 清除門檻：**出貨日期**早於這一天的派遣單才會被自動刪除。
+ *
+ *  一律看出貨日期，**不是匯入日期**（使用者 2026-08-06）：下班前會先把明天的配送資料匯進來，
+ *  用匯入日期判斷的話，那批明天的貨會被算成「今天的」而提早出現在送貨人員名單上。 */
 function statsCutoffTaipei(): Date {
   return new Date(startOfTodayTaipei().getTime() - STATS_KEEP_DAYS * 24 * 60 * 60 * 1000);
 }
@@ -378,16 +381,17 @@ ordersRouter.post("/import", requireRole("ADMIN"), upload.single("file"), async 
       }
     }
 
-    // 貨運行派遣單每天重新上傳（同一天可分多次上傳、全部累積），上傳時順手清掉太舊的。
+    // 匯入時順手清掉太舊的單子。**四個管道一視同仁**（含自家配送，使用者 2026-08-06：
+    // 系統一致比較不會混亂），清除門檻是**出貨日期**早於 `STATS_KEEP_DAYS` 天。
     //
-    // **只清 `STATS_KEEP_DAYS` 天以前的，不是「非今天」的**（使用者 2026-08-06 說明：
-    // 保留兩週＝每天的統計都留著、可以往回查）。「隔日就看不到昨天的貨」是**畫面**依
-    // 出貨日期過濾出來的（`CarrierDispatch` 只顯示今天），不是靠刪資料達成。
-    // 自家配送（SELF）有勾選、指派、配送狀態，一律不自動清，維持手動刪除。
+    // 為什麼不用匯入日期：下班前會先把明天的配送資料匯進來，用匯入日期判斷會把
+    // 「明天要出的貨」算成今天的。
+    // 只清 14 天以前的、不是「非今天」的：物流管理要能往回查每一天的統計。
+    // 「隔日就看不到舊的」是**畫面依出貨日期過濾**出來的，不是靠刪資料。
     // 清除範圍限這一批的 carrier，判斷也只看這一批有沒有進東西
-    if (carrier !== "SELF" && createdThisBatch.length + (updated - updatedBefore) > 0) {
+    if (createdThisBatch.length + (updated - updatedBefore) > 0) {
       const stale = await prisma.dispatchOrder.findMany({
-        where: { carrier, createdAt: { lt: statsCutoffTaipei() } },
+        where: { carrier, deliveryDate: { lt: statsCutoffTaipei() } },
         select: { id: true },
       });
       const staleIds = stale.map((o) => o.id);
