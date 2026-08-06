@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { api } from "../api/client";
 import { clearSession } from "../lib/auth";
+import { compareByProductCode, productCodeOf } from "../lib/productCodes";
 
 // 設計 tokens（沿用 reference/route-app-prototype.jsx）
 export const C = {
@@ -355,7 +356,9 @@ export function ProductSummary({
 }) {
   const map = new Map<string, number>();
   for (const it of items) map.set(it.productName, (map.get(it.productName) ?? 0) + it.quantity);
-  const rows = [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-Hant"));
+  // 依產品編號排序（使用者 2026-08-06 指定），順序照 ERP 主檔。
+  // 對不到編號的排最後，代表對照表要補（見 lib/productCodes.ts）。
+  const rows = [...map.entries()].sort((a, b) => compareByProductCode(a[0], b[0]));
   const total = rows.reduce((sum, [, qty]) => sum + qty, 0);
 
   return (
@@ -376,14 +379,25 @@ export function ProductSummary({
         </div>
       ) : (
         <>
-          {rows.map(([name, qty]) => (
-            <div key={name} className="px-3 py-1.5 flex items-center justify-between gap-2 border-t" style={{ borderColor: C.hairline }}>
-              <span className="text-[12px] flex-1 min-w-0 break-all">{name}</span>
-              <span style={{ fontFamily: "Manrope", color: accent }} className="text-[13px] font-bold shrink-0">
-                {qty}
-              </span>
-            </div>
-          ))}
+          {rows.map(([name, qty]) => {
+            const code = productCodeOf(name);
+            return (
+              <div key={name} className="px-3 py-1.5 flex items-center justify-between gap-2 border-t" style={{ borderColor: C.hairline }}>
+                {/* 既然照編號排序，就把編號列出來，否則看不出為什麼是這個順序。
+                    對不到編號的標「—」，那些會排在最後，代表對照表要補。 */}
+                <span
+                  style={{ fontFamily: "Manrope", color: code ? C.muted : C.danger, width: 46 }}
+                  className="text-[10px] font-bold shrink-0"
+                >
+                  {code ?? "—"}
+                </span>
+                <span className="text-[12px] flex-1 min-w-0 break-all">{name}</span>
+                <span style={{ fontFamily: "Manrope", color: accent }} className="text-[13px] font-bold shrink-0">
+                  {qty}
+                </span>
+              </div>
+            );
+          })}
           <div className="px-3 py-2 flex items-center justify-between border-t" style={{ borderColor: C.hairline, background: C.bg }}>
             <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="text-[12px] font-bold">
               全部貨品總計
