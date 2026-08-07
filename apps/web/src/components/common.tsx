@@ -262,6 +262,25 @@ export function shipmentDayLabel(day: string): string {
   return `${m}/${d}${suffix}`;
 }
 
+/**
+ * 只留下「最新出貨日」那一批單子。
+ *
+ * 作業現場是下班前先匯入明天的配送資料，匯完之後今天那批就不該再佔著版面
+ * （使用者 2026-08-07）。用「最新的一天」而不是「今天」，明天的資料一匯進來就會直接接手，
+ * 而在還沒匯明天資料之前，今天的仍然看得到。
+ *
+ * 沒有 deliveryDate 的舊資料會被歸到空字串，只要有任何一筆有日期就會被濾掉。
+ * 清單全部都沒有日期時原樣回傳，免得整個畫面變空的。
+ */
+export function onlyLatestDay<T extends { deliveryDate?: string | null }>(list: T[]): T[] {
+  let latest = "";
+  for (const o of list) {
+    const d = shipmentDay(o.deliveryDate);
+    if (d > latest) latest = d;
+  }
+  return latest ? list.filter((o) => shipmentDay(o.deliveryDate) === latest) : list;
+}
+
 export function dispatchDate(iso?: string | null): string {
   if (!iso) return "";
   const d = new Date(new Date(iso).getTime() + 8 * 60 * 60 * 1000);
@@ -269,8 +288,13 @@ export function dispatchDate(iso?: string | null): string {
 }
 
 /** 客戶名稱旁的派遣日期標籤 */
-export function DispatchDateTag({ createdAt }: { createdAt?: string | null }) {
-  const text = dispatchDate(createdAt);
+/**
+ * 客戶名稱旁的「派遣 MM/DD」小標。
+ * 顯示的是**出貨日期**：下班前會先匯入明天的配送資料，印匯入日期會讓整批看起來是今天要送的。
+ * 舊資料可能沒有 deliveryDate，才退回用匯入時間，免得標籤整個消失。
+ */
+export function DispatchDateTag({ deliveryDate, createdAt }: { deliveryDate?: string | null; createdAt?: string | null }) {
+  const text = dispatchDate(deliveryDate ?? createdAt);
   if (!text) return null;
   return (
     <span
@@ -459,7 +483,8 @@ export interface TimelineStop {
   legDurationMin?: number;
   products?: TimelineProduct[];
   note?: string; // 貨單附註（CSV 匯入時帶進來的交代事項）
-  createdAt?: string; // 派遣日期（檔案上傳時間），顯示在客戶名稱旁
+  deliveryDate?: string; // 出貨日期，顯示在客戶名稱旁的「派遣 MM/DD」
+  createdAt?: string; // 匯入時間；只在舊資料沒有 deliveryDate 時退而求其次
   // 有傳才顯示上下移動按鈕（送貨人員自行調整送貨順序）；已在頭尾的站別傳 undefined
   onMoveUp?: () => void;
   onMoveDown?: () => void;
@@ -690,7 +715,7 @@ export function RouteTimeline({
                       <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-bold text-[14px]">
                         {n.data.name}
                       </span>
-                      <DispatchDateTag createdAt={n.data.createdAt} />
+                      <DispatchDateTag deliveryDate={n.data.deliveryDate} createdAt={n.data.createdAt} />
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {n.data.isPriority && <PriorityTag />}

@@ -391,7 +391,7 @@ function ChannelOrderList({ orders, groupByCity }: { orders: Order[]; groupByCit
                   <span style={{ fontFamily: "'Noto Sans TC', sans-serif" }} className="font-semibold text-[13px]">
                     {o.customerName}
                   </span>
-                  <DispatchDateTag createdAt={o.createdAt} />
+                  <DispatchDateTag deliveryDate={o.deliveryDate} createdAt={o.createdAt} />
                 </div>
                 <div style={{ color: C.muted }} className="text-[11px] mt-0.5">
                   {o.address}

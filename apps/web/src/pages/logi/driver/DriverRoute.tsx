@@ -236,6 +236,7 @@ export default function DriverRoute() {
               legDistanceKm: leg.legDistanceKm,
               legDurationMin: leg.legDurationMin,
               note: o.orderNote ?? undefined,
+              deliveryDate: o.deliveryDate,
               createdAt: o.createdAt,
               products: o.items.map((i) => ({ name: i.productName, qty: i.quantity })),
             };
@@ -585,7 +586,7 @@ export default function DriverRoute() {
                         >
                           {o.customerName}
                         </span>
-                        <DispatchDateTag createdAt={o.createdAt} />
+                        <DispatchDateTag deliveryDate={o.deliveryDate} createdAt={o.createdAt} />
                       </div>
                       <div style={{ color: C.muted }} className="text-[11px] mt-0.5 break-all">
                         {o.address}

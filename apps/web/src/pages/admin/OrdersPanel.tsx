@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { getAuthedStaff } from "../../lib/auth";
 import { dispatchCityOf, dispatchCityIndex } from "../../lib/taiwanCities";
-import { C, Checkbox, ProductSummary, QtySubtotal, sumQty, DispatchDateTag } from "../../components/common";
+import { C, Checkbox, ProductSummary, QtySubtotal, sumQty, DispatchDateTag, onlyLatestDay } from "../../components/common";
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "待處理",
@@ -34,6 +34,7 @@ interface Order {
   lat?: number | null;
   orderNote?: string | null;
   createdAt?: string; // 派遣單匯入（檔案上傳）的時間
+  deliveryDate?: string; // 出貨日期——畫面上顯示與過濾都以這個為準，不是匯入時間
   items: OrderItem[];
 }
 
@@ -80,7 +81,10 @@ export default function OrdersPanel({
     setLoading(true);
     setError(null);
     try {
-      setOrders(await api.getOrders({ ...(status ? { status } : {}), ...(carrier ? { carrier } : {}) }));
+      const list: Order[] = await api.getOrders({ ...(status ? { status } : {}), ...(carrier ? { carrier } : {}) });
+      // 只留最新出貨日那一批：下班前匯入明天的資料後，今天的就不該再留在版面上
+      // （使用者 2026-08-07）。「已刪除」是回收桶，要看得到歷史，不套這個過濾。
+      setOrders(status === "CANCELLED" ? list : onlyLatestDay(list));
       setSelected(new Set());
     } catch (err) {
       setError((err as Error).message);
@@ -361,7 +365,7 @@ export default function OrdersPanel({
                       </span>
                     )}
                     <span className="font-semibold text-[13px]">{o.customerName}</span>
-                    <DispatchDateTag createdAt={o.createdAt} />
+                    <DispatchDateTag deliveryDate={o.deliveryDate} createdAt={o.createdAt} />
                     {isSelf && o.lat == null && (
                       <span style={{ color: C.danger }} className="text-[10px]">
                         未定位
