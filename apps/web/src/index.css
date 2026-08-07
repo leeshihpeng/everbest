@@ -22,3 +22,26 @@ body {
 body {
   overflow-wrap: break-word;
 }
+
+/* iOS Safari 聚焦「字級小於 16px」的輸入框時，會自動放大整頁。
+   放大後可視區比版面窄，頁面就能左右拖動——這就是使用者回報的
+   「有時畫面會左右移動」。**失焦不會還原，只有重新載入才回正**，
+   所以症狀看起來是偶發的。
+
+   注意上面的 `overflow-x: hidden` 擋不住這個：那是內容溢出的防線，
+   而這裡是瀏覽器縮放，兩回事。
+
+   16px 是 iOS 的門檻值，不是設計偏好——**改小一點點就會復發**。
+   只在窄螢幕套用，電腦版維持原本較小的字級。
+   checkbox／radio 沒有文字輸入，不會觸發放大，排除掉免得把勾選框撐大。
+
+   用 `!important` 不是偷懶：版面上的字級是 Tailwind 的 `text-[13px]` 這類 utility
+   類別，特異性 (0,1,0) 比 `select`／`textarea` 的 (0,0,1) 高，不加就只有 `input`
+   那條（帶兩個屬性選擇器、特異性 (0,2,1)）會生效，`select` 會被蓋過去而繼續放大。 */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

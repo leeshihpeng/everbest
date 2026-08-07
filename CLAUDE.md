@@ -392,3 +392,25 @@ watcher 傳 `carrier=AUTO`，後端 `POST /orders/import` 依每一列的 ID 分
   - **權限由業務範圍 `salesRegions` 換算**（縣市→北中南），不是另外設定：ADMIN 全部；
     徐文卿／李恭戎→北部、柯月惠→中部、許鴻章→南部。改業務範圍會連動追蹤權限，這是刻意的。
   - 區域過濾在後端強制（越權查其他區回 403），不能只靠前端隱藏。
+
+### 手機上「畫面會左右移動」的真正原因（2026-08-07）
+
+使用者回報手機版有時能左右拖動，重新載入就好。**不是內容溢出**——
+`index.css` 早就有 `html, body { overflow-x: hidden }`，各路由在 320px 下實測
+溢出都是 0。真正原因是 **iOS Safari 聚焦字級小於 16px 的輸入框時會自動放大整頁**，
+放大後可視區比版面窄，頁面就能左右拖動，而且**失焦不會還原，只有重新載入才回正**，
+所以症狀看起來是偶發的。
+
+- 修法在 `index.css`：`@media (max-width: 767px)` 下把
+  `input`／`select`／`textarea` 一律拉到 `16px !important`。
+  **16px 是 iOS 的門檻值，不是設計偏好，改小一點點就會復發。**
+- **`!important` 是必要的**：版面字級用 Tailwind 的 `text-[13px]` 這類 utility 類別，
+  特異性 (0,1,0) 比 `select`／`textarea` 的 (0,0,1) 高。第一版沒加，結果只有 `input`
+  那條（帶兩個 `:not([type=...])`，特異性 (0,2,1)）生效，物流管理的日期選單漏掉了。
+- 電腦版不套用，維持原本較小的字級。checkbox／radio 排除，否則勾選框會被撐大。
+- 記帳系統（`../sansoon-accounting`）已經是 16px，只有兩個 `input[type=file]` 是 13.3px，
+  但點檔案選擇器不會聚焦文字欄，不會觸發放大，不用改。
+
+**查這類問題時**：ADMIN 角色單獨進不了 `/logi/manager`、`/tracking`、`/logi/driver`，
+會被導回首頁。用 ADMIN 帳號掃版面會掃到空白頁還以為沒問題，
+要另外給 MANAGER／SALES／WAREHOUSE 才掃得到真正的畫面。
