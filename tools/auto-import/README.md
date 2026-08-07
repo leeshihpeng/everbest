@@ -106,6 +106,42 @@ powershell -ExecutionPolicy Bypass -File C:\Claude\route-scheduler\tools\auto-im
 **注意**：`.ps1` 檔請保持 UTF-8 **含 BOM** 的存檔格式，否則 Windows PowerShell 5.1
 會把中文當成 Big5 解讀而出現語法錯誤。
 
+## 四、改過程式或設定之後要重新啟動（不必重開機）
+
+`watch.mjs` 只在**啟動當下**被讀進記憶體，`.env` 也是。改完檔案不重啟的話，
+跑的還是舊版——日誌開頭那行 `開始監看 v…` 就是實際在跑的版本。
+
+在**公司那台電腦**上開 PowerShell：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\Claude\route-scheduler\tools\auto-import\restart.ps1
+```
+
+這支會停掉舊的 node、清掉鎖檔、再照原本的安裝方式（工作排程或直接執行）啟動，
+最後印出日誌最後 12 行讓你確認版本換了沒。
+
+不想用腳本的話，手動三步也一樣：
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -like '*watch.mjs*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+```
+
+```powershell
+Start-Process node -ArgumentList 'C:\Claude\route-scheduler\tools\auto-import\watch.mjs' -WorkingDirectory 'C:\Claude\route-scheduler\tools\auto-import' -WindowStyle Minimized
+```
+
+```powershell
+Get-Content C:\Claude\route-scheduler\tools\auto-import\auto-import.log -Tail 12
+```
+
+> 裝成工作排程的話，第二步改成 `Start-ScheduledTask -TaskName 三順派遣單自動匯入`。
+> **不需要重新跑 `install-task.ps1`**：排程存的是 node 路徑與參數，程式碼每次啟動才讀。
+
+- **`state.json` 不會被重啟清掉**，所以今天已經匯入過的檔名不會再匯一次。
+  要讓某個檔案重新匯入，把它從 `state.json` 裡刪掉，或直接從內勤後台人工上傳。
+- 停掉舊程序後鎖檔會自己失效（`acquireLock` 會探測 PID 還在不在），
+  只有硬體斷電那種情況才需要手動刪 `watch.lock`。
+
 ## 搬到另一台電腦（例如工作電腦）
 
 1. 那台電腦要先裝 [Node.js](https://nodejs.org/)（LTS 版即可）。
