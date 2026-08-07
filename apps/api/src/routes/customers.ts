@@ -22,7 +22,7 @@ customersRouter.get("/", async (_req, res, next) => {
 
 // 新增客戶是業務／內勤的工作。沒有這層限制，送貨人員或倉管的 token 也能新增客戶，
 // 順帶消耗 Google 定位額度。
-customersRouter.post("/", requireRole(["SALES", "MANAGER", "ADMIN"]), async (req, res, next) => {
+customersRouter.post("/", requireRole(["SALES", "MANAGER", "ADMIN", "ACCOUNTING"]), async (req, res, next) => {
   try {
     const { code, name, address, phone, isPriority } = req.body ?? {};
     // 必填欄位缺漏或型別不對時，回明確的 400，而不是讓 Prisma 拋錯變成 500。
@@ -52,6 +52,48 @@ customersRouter.post("/", requireRole(["SALES", "MANAGER", "ADMIN"]), async (req
   }
 });
 
+/**
+ * 記帳系統匯入應收帳款時的補建入口：對帳單上有、客戶主檔沒有的客戶，在這裡補一筆。
+ *
+ * 這種資料**只有編號與名稱**，沒有地址也沒有縣市，所以一律標 `unconfirmed`，
+ * 讓配送相關的畫面排除它們——沒有地址無法定位，混進路線規劃只會產生錯誤的派遣。
+ * 已存在的客戶**不覆蓋**：主檔的地址是業務維護的，對帳單沒有這些欄位，
+ * 覆蓋等於用比較差的資料蓋掉比較好的資料。
+ */
+customersRouter.post("/ensure", requireRole(["ADMIN", "ACCOUNTING"]), async (req, res, next) => {
+  try {
+    const list = (req.body ?? {}).customers;
+    if (!Array.isArray(list)) return res.status(400).json({ error: "請提供 customers 陣列" });
+    if (list.length > 2000) return res.status(400).json({ error: "一次最多 2000 筆" });
+
+    const created: string[] = [];
+    const existed: string[] = [];
+    const errors: string[] = [];
+
+    for (const raw of list) {
+      const code = typeof raw?.code === "string" ? raw.code.trim() : "";
+      const name = typeof raw?.name === "string" ? raw.name.trim() : "";
+      if (!code || !name) {
+        errors.push(`缺少編號或名稱：${JSON.stringify(raw)}`);
+        continue;
+      }
+      const hit = await prisma.customer.findUnique({ where: { code } });
+      if (hit) {
+        existed.push(code);
+        continue;
+      }
+      await prisma.customer.create({
+        data: { code, name, address: "", city: "", unconfirmed: true },
+      });
+      created.push(code);
+    }
+
+    res.json({ createdCount: created.length, existedCount: existed.length, created, errors });
+  } catch (err) {
+    next(err);
+  }
+});
+
 customersRouter.delete("/:id", requireRole("ADMIN"), async (req, res, next) => {
   try {
     await prisma.customer.delete({ where: { id: req.params.id } });
@@ -71,7 +113,9 @@ customersRouter.delete("/", requireRole("ADMIN"), async (_req, res, next) => {
   }
 });
 
-customersRouter.put("/:id", requireRole("ADMIN"), async (req, res, next) => {
+// 客戶主檔與記帳系統共用，兩邊都能改（使用者 2026-08-07 選定），所以會計也放行。
+// 記帳只送得出名稱／電話／地址，座標與優先仍然只有這裡會動。
+customersRouter.put("/:id", requireRole(["ADMIN", "ACCOUNTING"]), async (req, res, next) => {
   try {
     const { name, address, phone, isPriority } = req.body;
     const updateData: Record<string, unknown> = { name, phone, isPriority };
@@ -83,6 +127,8 @@ customersRouter.put("/:id", requireRole("ADMIN"), async (req, res, next) => {
         updateData.lat = coords.lat;
         updateData.lng = coords.lng;
       }
+      // 補上地址就不再是「只有名字的補建資料」，可以正常排配送了
+      updateData.unconfirmed = false;
     }
     const customer = await prisma.customer.update({ where: { id: req.params.id }, data: updateData });
     res.json(customer);

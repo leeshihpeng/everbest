@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import { randomBytes } from "crypto";
 import { PrismaClient } from "@prisma/client";
 import { rolesToArray } from "../utils/roles";
+import { verifyFirebaseIdToken, firebaseAuthEnabled } from "./firebaseAuth";
 
 const prisma = new PrismaClient();
 
@@ -49,10 +50,19 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
     return res.status(401).json({ error: "未登入" });
   }
 
+  const token = header.slice(7);
+
+  // 三順記帳系統走 Google 登入，帶的是 Firebase 簽的 RS256 token；
+  // 本系統自己簽的是 HS256。用演算法分流，不必讓前端多帶一個標頭。
+  const alg = jwt.decode(token, { complete: true })?.header.alg;
+  if (alg === "RS256") {
+    return authenticateByFirebase(token, req, res, next);
+  }
+
   type Payload = { id?: string; iat?: number; iatMs?: number; impersonatedBy?: Impersonation };
   let payload: Payload;
   try {
-    payload = jwt.verify(header.slice(7), SECRET) as Payload;
+    payload = jwt.verify(token, SECRET) as Payload;
   } catch {
     return res.status(401).json({ error: "登入已過期，請重新登入" });
   }
@@ -98,6 +108,37 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
       roles: rolesToArray(staff.roles),
       impersonatedBy: payload.impersonatedBy,
     };
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 記帳系統的登入路徑：驗證 Firebase ID token，再用 email 對到本系統的員工。
+ *
+ * **email 對不到員工就擋下來**，不會自動建帳號——否則任何有 Google 帳號的人
+ * 都能登入並讀到全部客戶資料。要開放誰，就到人員設定裡幫他填 email。
+ * 角色仍然一律以資料庫為準，記帳系統不能自己宣稱身分。
+ */
+async function authenticateByFirebase(token: string, req: AuthedRequest, res: Response, next: NextFunction) {
+  if (!firebaseAuthEnabled) {
+    return res.status(401).json({ error: "本服務未啟用記帳系統登入" });
+  }
+  try {
+    const identity = await verifyFirebaseIdToken(token);
+    if (!identity) return res.status(401).json({ error: "Google 登入憑證無效或已過期，請重新登入" });
+
+    const staff = await prisma.staff.findUnique({
+      where: { email: identity.email },
+      select: { id: true, name: true, roles: true },
+    });
+    if (!staff) {
+      console.log(`[記帳登入] ${identity.email} 沒有對應的員工帳號，已拒絕`);
+      return res.status(403).json({ error: "這個 Google 帳號尚未開通，請聯絡管理者" });
+    }
+
+    req.staff = { id: staff.id, name: staff.name, roles: rolesToArray(staff.roles) };
     next();
   } catch (err) {
     next(err);

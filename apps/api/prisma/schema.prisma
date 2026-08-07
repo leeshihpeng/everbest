@@ -22,6 +22,10 @@ model Customer {
   isPriority Boolean  @default(false)
   lat        Float?
   lng        Float?
+  // 記帳系統匯入應收帳款時，對帳單上有、客戶主檔沒有的客戶會自動補建，
+  // 那些只有名稱與編號、沒有地址與縣市。標記起來讓配送相關的畫面排除它們：
+  // 沒有地址就無法定位，混進路線規劃只會產生錯誤的派遣。補齊地址後把這個旗標清掉即可。
+  unconfirmed Boolean @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -30,6 +34,9 @@ model Staff {
   id          String      @id @default(cuid())
   name        String
   roles       String      // 逗號分隔的 StaffRole 清單（SQLite 不支援陣列型別），見 rolesToArray/rolesToString
+  // 記帳系統用 Google 登入，只拿得到 email；靠這個欄位對到同一個人。
+  // 沒填的人就是不開放記帳系統，不是錯誤狀態。
+  email       String?     @unique
   homeAddress String
   homeLat     Float?
   homeLng     Float?

@@ -18,6 +18,8 @@ interface Customer {
   isPriority: boolean;
   lat?: number | null;
   lng?: number | null;
+  /** 記帳系統補建、只有名稱沒有地址的客戶。不能排配送。 */
+  unconfirmed?: boolean;
 }
 
 interface Staff {
@@ -103,6 +105,9 @@ export default function BizSetup() {
     const m: Record<string, Customer[]> = {};
     customers
       .filter((c) => !search || c.code.includes(search) || c.name.includes(search))
+      // 記帳系統匯入應收時補建的客戶只有名稱、沒有地址，無法定位也就無法排路線。
+      // 補齊地址後旗標會自動清掉，屆時就會出現在這裡。
+      .filter((c) => !c.unconfirmed)
       .filter((c) => !allowedCities || allowedCities.has(c.city))
       .forEach((c) => {
         (m[c.city] = m[c.city] || []).push(c);

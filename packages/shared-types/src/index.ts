@@ -2,7 +2,9 @@
 
 // MANAGER_VIEW / DRIVER_VIEW：唯讀查看物流主管／送貨人員畫面，但不能勾選派遣單、指派、標記完成
 // WAREHOUSE：倉管（角色細部權限待定，先能指派）
-export type StaffRole = "SALES" | "MANAGER" | "MANAGER_VIEW" | "DRIVER" | "DRIVER_VIEW" | "ADMIN" | "WAREHOUSE";
+// ACCOUNTING：會計。**只用在三順記帳系統**，讓它讀寫共用的客戶主檔；
+//   不會讓人看到派遣單、出貨或貨物追蹤。要開通記帳系統還必須在該員工填上 email。
+export type StaffRole = "SALES" | "MANAGER" | "MANAGER_VIEW" | "DRIVER" | "DRIVER_VIEW" | "ADMIN" | "WAREHOUSE" | "ACCOUNTING";
 // CANCELLED：送貨人員／倉管把不需要送的單子「刪除」後的狀態。
 // 刻意不是真的從資料庫刪除——自動匯入會重讀同一份 ERP 檔案，真刪掉的單子隔幾分鐘就會長回來。
 export type OrderStatus = "PENDING" | "SELECTED" | "DISPATCHED" | "COMPLETED" | "CANCELLED";
