@@ -24,11 +24,23 @@
 
 - 前端：https://everbest-web-jade.vercel.app（Vercel）
 - 後端：https://sansoon-api-702692123354.asia-east1.run.app（**Cloud Run，2026-08-04 起正式**）
-- 舊後端 https://everbest.onrender.com（Render）**還活著但已無人使用**，留著當退路。
-  Render 仍會隨 `git push` 自動部署；確認 Cloud Run 穩定後再關閉。
-  **關掉之前先確認工作電腦的 `tools/auto-import/.env` 的 `API_BASE` 已改成 Cloud Run**——
-  兩邊連同一個資料庫，打舊網址照樣成功，看不出異狀，關掉那天才會無聲停止匯入。
+- 舊後端 https://everbest.onrender.com（Render）**已無人使用，可以關閉**。
+  2026-08-07 逐項確認過：正式前端 `everbest-web` 的 `VITE_API_BASE_URL` 指向 Cloud Run、
+  工作電腦 `tools/auto-import/.env` 的 `API_BASE` 也是 Cloud Run，原始碼裡沒有殘留的
+  onrender 位址。Render 仍會隨 `git push` 自動部署，且**連的是同一個正式資料庫**，
+  等於多開一道門，沒有留著的理由。
 - **Vercel 的 GitHub 自動部署目前是壞的**，前端要用 `npx vercel --prod` 手動發佈。
+- ⚠ **Vercel 底下有兩個專案，只有 `everbest-web` 是正式站**：
+  | 專案 | 網址 | 狀態 |
+  |---|---|---|
+  | `everbest-web` | everbest-web-jade.vercel.app | **正式站**，有設 `VITE_API_BASE_URL` 指向 Cloud Run |
+  | `web` | web-rose-three-92.vercel.app | 沒人用，沒設 API 位址，前端打 `/api` 會 404 |
+
+  `everbest-web` 的 **Root Directory 設在 `apps/web`**，所以
+  **`npx vercel --prod` 要在 repo 根目錄執行**，在 `apps/web` 底下跑會報
+  「path apps/web/apps/web does not exist」。2026-08-07 曾誤把整個 session 的前端
+  都發佈到 `web` 專案，正式站完全沒更新卻以為部署成功——
+  **驗證時要抓 everbest-web-jade 的 bundle，不是自己剛部署的那個網址。**
 - Cloud Run 部署方式、環境變數、IAM 權限見 `docs/cloud-run.md`。
   **後端改完不會自己上線**，要跑 `gcloud run deploy sansoon-api --source . --region asia-east1`。
 - Cloud Run 不跑 `prisma migrate deploy`（多實例會互相衝突），
@@ -65,6 +77,12 @@
 ## 安全性（2026-07 檢視後修補，勿回退）
 
 - `JWT_SECRET` **不再有預設值**：正式環境沒設就拒絕啟動；本機沒設會用隨機值。
+  ⚠ **「有設」不等於「設得對」。** 2026-08-07 發現 Cloud Run 上的 `JWT_SECRET` 一直是
+  `dev-secret-change-me`——那串出現在初始 commit 的 `.env.example`，而
+  `leeshihpeng/everbest` 是**公開** repo，等於任何人都能簽出 ADMIN token。
+  當初產生的新密鑰只設到了 Render，Cloud Run 漏掉，而 `/health` 的 `hasJwtSecret`
+  只檢查非空值，所以看起來一切正常。已輪換並驗證外洩密鑰簽出的 token 會被 401 擋下。
+  **換平台或加環境變數後，要實際用舊值簽一個 token 打打看，不要只看 health 的布林值。**
   絕對不要為了方便再加回寫死的預設密鑰。
 - 登入有**失敗鎖定**（帳號與 IP 各 5 次 → 鎖 10 分鐘），因為密碼是短數字 PIN。
 - `errorHandler` **只回概括訊息**，詳細錯誤僅寫入伺服器日誌
